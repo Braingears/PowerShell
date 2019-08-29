@@ -1,14 +1,3 @@
-##### Notes #####
-##From ConnectWise Control / ScreenConnect
-##!ps
-##timeout=900000
-##maxlength=9000000
-#(New-Object Net.WebClient).DownloadString('https://support.braingears.com/Automate-Module.ps1') | iex; Install-Automate -Server autopt-cf.hostedrmm.com -LocationID 2
-###From PowerShell
-#(New-Object Net.WebClient).DownloadString('https://support.braingears.com/Automate-Module.ps1') | iex; Install-Automate -Server autopt-cf.hostedrmm.com -LocationID 2
-###From CMD Prompt: 
-#powershell.exe -Command "(New-Object Net.WebClient).DownloadString('https://support.braingears.com/Automate-Module.ps1') | iex; Install-Automate -Server autopt-cf.hostedrmm.com -LocationID 2"
-#
 Function Confirm-Automate {
 <#
 .SYNOPSIS
