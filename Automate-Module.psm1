@@ -245,7 +245,7 @@ Confirm-Automate -Silent
         Start-Sleep 10
         Confirm-Automate -Silent
 		Write-Verbose $Global:Automate 
-        If (($Automate.InstFolder) -or ($Automate.InstRegistry)) {
+        If ((!$Automate.InstFolder) -and (!$Automate.InstRegistry)) {
             Write-Verbose "Automate Uninstaller Completed Successfully"
             Break
         }
