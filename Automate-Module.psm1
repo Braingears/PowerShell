@@ -240,29 +240,16 @@ Confirm-Automate -Silent
             Write-Verbose "Automate Uninstall Exit Code: $($UninstallExitCode)"
         }
     }
-    Start-Sleep 10
-    While ($Counter -ne 20) {
+    While ($Counter -ne 9) {
         $Counter++
         Start-Sleep 10
         Confirm-Automate -Silent
+		Write-Verbose $Global:Automate 
         If (($Automate.InstFolder) -or ($Automate.InstRegistry)) {
-            If (!$Silent) {
-                Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
-                $Global:Automate
-            }#end If Silent
+            Write-Verbose "Automate Uninstaller Completed Successfully"
             Break
-        } # end If
-    }# end While    
-    
-    
-    
-    Write-Verbose "Sleeping 10 seconds..."
-    If (Get-Process *Uninstall*) {
-        Write-Verbose "Uninstall still running..."
-        Write-Verbose "Sleeping 20 another seconds..."
-        Start-Sleep 20
-    }
-    Confirm-Automate -Silent
+        }
+    }# end While
     If (($Automate.InstFolder) -or ($Automate.InstRegistry)) {
         Write-Verbose "Uninstaller Failed"
         Write-Verbose "Manually Gutting Automate..."
