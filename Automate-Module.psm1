@@ -163,7 +163,7 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
         Write-Verbose $Global:Automate
     } #End If Registry Exists
-    If (!$Automate.InstFolder -and !$Automate.InstRegistry) {If ($Silent -eq $False) {Write "Automate is NOT Installed"}}
+    If (!$Global:Automate.InstFolder -and !$Global:Automate.InstRegistry) {If ($Silent -eq $False) {Write "Automate is NOT Installed"}}
 } #End Function Confirm-Automate
 ########################
 Set-Alias -Name LTC -Value Confirm-Automate -Description 'Confirm If Automate is running properly'
@@ -206,9 +206,10 @@ Function Uninstall-Automate {
      [switch]$Force,
      [switch]$Raw,
      [switch]$Show,
-     [switch]$Silent
+     [switch]$Silent = $False
      )
 $ErrorActionPreference = 'SilentlyContinue'
+$Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
 $DownloadPath = "https://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
 If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {
     $DownloadPath = "https://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
@@ -217,8 +218,8 @@ If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((g
 }
 $SoftwarePath = "C:\Support\Automate"
 Write-Debug "Checking if Automate Installed"
-Confirm-Automate -Silent
-    If (($Automate.InstFolder) -or ($Automate.InstRegistry) -or ($Force)) {
+Confirm-Automate -Silent -Verbose:$Verbose
+    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or ($Force)) {
     $Filename = [System.IO.Path]::GetFileName($DownloadPath)
     $SoftwareFullPath = "$($SoftwarePath)\$Filename"
     If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
@@ -233,24 +234,24 @@ Confirm-Automate -Silent
     $UninstallExitCode = (Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
     If (!$Silent) {
         If ($UninstallExitCode -eq 0) {
-            Write-Host "The Automate Agent Uninstaller Executed Without Errors" -ForegroundColor Green
+          # Write-Host "The Automate Agent Uninstaller Executed Without Errors" -ForegroundColor Green
             Write-Verbose "The Automate Agent Uninstaller Executed Without Errors"
         } Else {
             Write-Host "Automate Uninstall Exit Code: $($UninstallExitCode)" -ForegroundColor Red
             Write-Verbose "Automate Uninstall Exit Code: $($UninstallExitCode)"
         }
     }
+	Write-Verbose "Checking For Removal - Loop 10X"
     While ($Counter -ne 9) {
         $Counter++
         Start-Sleep 10
-        Confirm-Automate -Silent
-		Write-Verbose $Global:Automate 
-        If ((!$Automate.InstFolder) -and (!$Automate.InstRegistry)) {
+        Confirm-Automate -Silent -Verbose:$Verbose
+        If ((!$Global:Automate.InstFolder) -and (!$Global:Automate.InstRegistry)) {
             Write-Verbose "Automate Uninstaller Completed Successfully"
             Break
         }
     }# end While
-    If (($Automate.InstFolder) -or ($Automate.InstRegistry)) {
+    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry)) {
         Write-Verbose "Uninstaller Failed"
         Write-Verbose "Manually Gutting Automate..."
         Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force 
@@ -261,8 +262,8 @@ Confirm-Automate -Silent
         Get-ItemProperty "HKLM:\SOFTWARE\LabTech\LabVNC" | Remove-Item -Recurse -Force
         Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service" | Remove-Item -Recurse -Force
         Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru
-        Confirm-Automate -Silent
-        If ($Automate.InstFolder) {
+        Confirm-Automate -Silent -Verbose:$Verbose
+        If ($Global:Automate.InstFolder) {
             If (!$Silent) {
                 Write-Host "Automate Uninstall Failed" -ForegroundColor Red
                 Write-Host "$($env:windir)\ltsvc folder still exists" -ForegroundColor Red
@@ -270,7 +271,7 @@ Confirm-Automate -Silent
                 Write-Verbose "Automate Uninstall Failed"
                 Write-Verbose "$($env:windir)\ltsvc folder still exists"
             }
-            If ($Automate.InstRegistry) {
+            If ($Global:Automate.InstRegistry) {
                 Write-Host "Automate Uninstall Failed" -ForegroundColor Red
                 Write-Host "HKLM:\SOFTWARE\LabTech\Service Registry keys still exists" -ForegroundColor Red
             } else {
@@ -397,6 +398,7 @@ Function Install-Automate {
         [switch]$Transcript = $False
     )
     $ErrorActionPreference = 'SilentlyContinue'
+	$Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
     $Error.Clear()
     If ($Transcript) {Start-Transcript -Path "$($env:windir)\Temp\Automate_Deploy.txt" -Force}
     Write-Verbose "Checking Operating System (WinXP and Older) for HTTP vs HTTPS"
@@ -420,7 +422,7 @@ Function Install-Automate {
         Confirm-Automate -Show
         Break
         }
-    Confirm-Automate -Silent
+    Confirm-Automate -Silent -Verbose:$Verbose
     Write-Verbose "If ServerAddress matches, the Automate Agent is currently Online, and Not forced to Rip & Replace then Automate is already installed."
     Write-Verbose (($Global:Automate.ServerAddress -like "*$($Server)*") -and ($Global:Automate.Online) -and !($Force))
     If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
@@ -431,7 +433,6 @@ Function Install-Automate {
               Write-Host "The Automate Agent is already installed and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
             }
         }
-        Write-Verbose $Global:Automate
     } Else {
         If (!$Silent -and $Global:Automate.Online -and (!($Global:Automate.ServerAddress -like "*$($Server)*"))) {
             Write-Host "The Existing Automate Server Does Not Match The Target Automate Server." -ForegroundColor Red
@@ -439,9 +440,7 @@ Function Install-Automate {
             Write-Host "New Automate Server:     $($AutomateURL)" -ForegroundColor Green
         } # If Different Server 
         Write-Verbose "Removing Existing Automate Agent"
-        Uninstall-Automate -Force:$Force -Silent:$Silent
-        Write-Verbose "Uninstall-Automate Completed. Waiting 30 Seconds..."
-        Start-Sleep 30
+        Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
         Write-Verbose "Installing Automate Agent on $($AutomateURL)"
             If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
             Set-Location $SoftwarePath
@@ -453,7 +452,7 @@ Function Install-Automate {
             Write-Verbose $(Get-Variable * | Select-Object -Property Name,Value | fl)
             $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID)" -NoNewWindow -Wait -PassThru).ExitCode
             If ($InstallExitCode -eq 0) {
-                If (!$Silent) {Write-Host "The Automate Agent Installer Executed Without Errors" -ForegroundColor Green}
+                If (!$Silent) {Write-Verbose "The Automate Agent Installer Executed Without Errors"}
             } Else {
                 Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Red
                 Write-Host "The Automate MSI failed. Waiting 15 Seconds..." -ForegroundColor Red
@@ -465,7 +464,7 @@ Function Install-Automate {
         While ($Counter -ne 30) {
             $Counter++
             Start-Sleep 10
-            Confirm-Automate -Silent
+            Confirm-Automate -Silent -Verbose:$Verbose
             If ($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null) {
                 If (!$Silent) {
                     Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
@@ -640,6 +639,7 @@ Param
 BEGIN
 {
     $ErrorActionPreference = "SilentlyContinue"
+	$Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
     Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
     $AutomateURLTest = "https://$($Server)/LabTech/"
     Write-Verbose "$AutomateURLTest"
@@ -677,7 +677,7 @@ PROCESS
         Write-Verbose "Invoke Confirm-Automate -Silent"
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
         Confirm-Automate -Silent
-        Write $Automate
+        Write $Global:Automate
     }
     $InstallAutomateWinRM = {
         $Server = $Args[0]
@@ -835,7 +835,7 @@ PROCESS
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-WmiObject -ComputerName $Computer -Class Win32_Service -Filter "Name='LTService'" -Credential $Credential -ErrorAction SilentlyContinue -ErrorVariable ProcessErrorWMIC).State)
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'HeartbeatLastReceived').Data).Seconds)
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'LastSuccessStatus').Data).Seconds)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value ($Automate.InstFolder -and ($Automate.Service) -eq "Running")
+                        $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value ($Global:Automate.InstFolder -and ($Global:Automate.Service -eq "Running"))
                         Write-Verbose $Global:Automate
                         If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
                             If ($Show) {
