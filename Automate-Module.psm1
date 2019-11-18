@@ -284,7 +284,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
         Write-Verbose "The Automate Agent Uninstalled Successfully"
     }
 } # If Test-Install
-    # Confirm-Automate -Silent:$Silent
+    Confirm-Automate -Silent:$Silent
 } # Function Uninstall-Automate
 ########################
 Set-Alias -Name LTU -Value Uninstall-Automate -Description 'Uninstall Automate Agent'
@@ -449,7 +449,6 @@ Function Install-Automate {
             $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
             If (!$Silent) {Write-Host "Installing Automate Agent to $AutomateURL"}
             Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force -PassThru
-            Write-Verbose $(Get-Variable * | Select-Object -Property Name,Value | fl)
             $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID)" -NoNewWindow -Wait -PassThru).ExitCode
             If ($InstallExitCode -eq 0) {
                 If (!$Silent) {Write-Verbose "The Automate Agent Installer Executed Without Errors"}
@@ -865,7 +864,7 @@ PROCESS
                         $WMIExitCode = Invoke-WmiMethod -class Win32_process -name Create -ArgumentList $WMIArg -ComputerName $Computer -Impersonation 3 -EnableAllPrivileges -Credential $Credential -ErrorAction SilentlyContinue
                         If ($WMIExitCode.ReturnValue -eq 0) {
                             Write-Host "Installing Automate Agent to https://$($Server) - WMI" -ForegroundColor Green
-                            Write-Verbose "When pushing via WMI/RPC, the function will not wait and confirm the installation. "
+                            Write-Verbose "When pushing via WMI, the function will not wait and confirm the installation. "
                             $WMIDeployed = $True
                         } Else {
                             Write-Host "WMI Did NOT Execute Properly." -ForegroundColor Red
