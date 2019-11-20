@@ -138,8 +138,8 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-Service LTService).Status)
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value [int64](((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived).TotalSeconds)
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value [int64](((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).TotalSeconds)
+        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived).TotalSeconds)
+        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).TotalSeconds)
         Write-Verbose $Global:Automate
         If ($Show) {
             $Global:Automate
@@ -832,8 +832,8 @@ PROCESS
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name InstRegistry -Value $True                        
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-WmiObject -ComputerName $Computer -Class Win32_Service -Filter "Name='LTService'" -Credential $Credential -ErrorAction SilentlyContinue -ErrorVariable ProcessErrorWMIC).State)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value [int64](((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'HeartbeatLastReceived').Data).TotalSeconds)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value [int64](((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'LastSuccessStatus').Data).TotalSeconds)
+                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'HeartbeatLastReceived').Data).TotalSeconds)
+                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'LastSuccessStatus').Data).TotalSeconds)
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value ($Global:Automate.InstFolder -and ($Global:Automate.Service -eq "Running"))
                         Write-Verbose $Global:Automate
                         If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
