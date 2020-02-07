@@ -124,7 +124,7 @@ Function Confirm-Automate {
         [switch]$Silent = $False
     )
     $ErrorActionPreference = 'SilentlyContinue'
-    $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((( (Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).Seconds) -lt 600)} Else {Write $False}
+    $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((( (Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).TotalSeconds) -lt 600)} Else {Write $False}
     If (Test-Path "HKLM:\SOFTWARE\LabTech\Service") {
         $Global:Automate = New-Object -TypeName psobject
         $Global:Automate | Add-Member -MemberType NoteProperty -Name ComputerName -Value $env:ComputerName
@@ -138,8 +138,8 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-Service LTService).Status)
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived).Seconds)
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).Seconds)
+        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived).TotalSeconds)
+        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).TotalSeconds)
         Write-Verbose $Global:Automate
         If ($Show) {
             $Global:Automate
@@ -241,8 +241,8 @@ Confirm-Automate -Silent -Verbose:$Verbose
             Write-Verbose "Automate Uninstall Exit Code: $($UninstallExitCode)"
         }
     }
-	Write-Verbose "Checking For Removal - Loop 10X"
-    While ($Counter -ne 9) {
+	Write-Verbose "Checking For Removal - Loop 3X"
+    While ($Counter -ne 3) {
         $Counter++
         Start-Sleep 10
         Confirm-Automate -Silent -Verbose:$Verbose
@@ -257,11 +257,11 @@ Confirm-Automate -Silent -Verbose:$Verbose
         Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force 
         Stop-Service ltservice,ltsvcmon -Force
         Write-Verbose "Uninstalling LabTechAD Package"
-        Start-Process "msiexec.exe" -ArgumentList "/x {3F460D4C-D217-46B4-80B6-B5ED50BD7CF5} /qn" -NoNewWindow -Wait -PassThru
+        Start-Process "msiexec.exe" -ArgumentList "/x {3F460D4C-D217-46B4-80B6-B5ED50BD7CF5} /qn" -NoNewWindow -Wait -PassThru | Out-Null
         Remove-Item "$($env:windir)\ltsvc" -Recursive -Force
         Get-ItemProperty "HKLM:\SOFTWARE\LabTech\LabVNC" | Remove-Item -Recurse -Force
         Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service" | Remove-Item -Recurse -Force
-        Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru
+        Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru | Out-Null
         Confirm-Automate -Silent -Verbose:$Verbose
         If ($Global:Automate.InstFolder) {
             If (!$Silent) {
@@ -832,8 +832,8 @@ PROCESS
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name InstRegistry -Value $True                        
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-WmiObject -ComputerName $Computer -Class Win32_Service -Filter "Name='LTService'" -Credential $Credential -ErrorAction SilentlyContinue -ErrorVariable ProcessErrorWMIC).State)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'HeartbeatLastReceived').Data).Seconds)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'LastSuccessStatus').Data).Seconds)
+                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'HeartbeatLastReceived').Data).TotalSeconds)
+                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'LastSuccessStatus').Data).TotalSeconds)
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value ($Global:Automate.InstFolder -and ($Global:Automate.Service -eq "Running"))
                         Write-Verbose $Global:Automate
                         If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
