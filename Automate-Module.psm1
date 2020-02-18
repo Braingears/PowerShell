@@ -449,7 +449,7 @@ Function Install-Automate {
             $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
             If (!$Silent) {Write-Host "Installing Automate Agent to $AutomateURL"}
             Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force -PassThru
-            $Date = (get-date -UFormat %Y-%m-%d--%H-%M-%S)
+            $Date = (get-date -UFormat %Y-%m-%d_%H-%M-%S)
             $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
             $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
             If ($InstallExitCode -eq 0) {
@@ -460,7 +460,7 @@ Function Install-Automate {
                 Write-Host "The Automate MSI failed. Waiting 15 Seconds..." -ForegroundColor Red
                 Start-Sleep -s 15
                 Write-Host "Installer will execute twice (KI 12002617)" -ForegroundColor Yellow
-                $Date = (get-date -UFormat %Y-%m-%d--%H-%M-%S)
+                $Date = (get-date -UFormat %Y-%m-%d_%H-%M-%S)
                 $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
                 $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
                 Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Yellow
