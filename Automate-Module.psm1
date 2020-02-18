@@ -369,7 +369,10 @@ Function Install-Automate {
     Changes        : Add $Automate.InstFolder and $Automate.InstRegistry and check for both to be consdered for $Automate.Installed
                      It was found that the Automate Uninstaller EXE is leaving behind the LabTech registry keys and it was not being detected properly.
                      If the LTSVC Folder or Registry keys are found after the uninstaller runs, the script now performs a manual gutting via PowerShell.
-
+    
+    Version        : 1.2
+    Date           : 02/17/2020
+    Changes        : Add MSIEXEC Log Files to C:\Windows\Temp\Automate_Agent_(Date).log
 
 .EXAMPLE
     Install-Automate -Server 'automate.domain.com' -LocationID 42
@@ -452,6 +455,7 @@ Function Install-Automate {
             $Date = (get-date -UFormat %Y-%m-%d_%H-%M-%S)
             $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
             $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
+            Write-Verbose "MSIEXEC Log Files: $LogFullPath"
             If ($InstallExitCode -eq 0) {
                 If (!$Silent) {Write-Verbose "The Automate Agent Installer Executed Without Errors"}
             } Else {
