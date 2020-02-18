@@ -241,7 +241,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
             Write-Verbose "Automate Uninstall Exit Code: $($UninstallExitCode)"
         }
     }
-	Write-Verbose "Checking For Removal - Loop 3X"
+    Write-Verbose "Checking For Removal - Loop 3X"
     While ($Counter -ne 3) {
         $Counter++
         Start-Sleep 10
@@ -398,7 +398,7 @@ Function Install-Automate {
         [switch]$Transcript = $False
     )
     $ErrorActionPreference = 'SilentlyContinue'
-	$Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
+    $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
     $Error.Clear()
     If ($Transcript) {Start-Transcript -Path "$($env:windir)\Temp\Automate_Deploy.txt" -Force}
     Write-Verbose "Checking Operating System (WinXP and Older) for HTTP vs HTTPS"
@@ -449,16 +449,22 @@ Function Install-Automate {
             $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
             If (!$Silent) {Write-Host "Installing Automate Agent to $AutomateURL"}
             Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force -PassThru
-            $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID)" -NoNewWindow -Wait -PassThru).ExitCode
+            $Date = (get-date -UFormat %Y-%m-%d--%H-%M-%S)
+            $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
+            $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
             If ($InstallExitCode -eq 0) {
                 If (!$Silent) {Write-Verbose "The Automate Agent Installer Executed Without Errors"}
             } Else {
                 Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Red
+                Write-Host "Automate Installer Logs: $LogFullPath" -ForegroundColor Red
                 Write-Host "The Automate MSI failed. Waiting 15 Seconds..." -ForegroundColor Red
                 Start-Sleep -s 15
                 Write-Host "Installer will execute twice (KI 12002617)" -ForegroundColor Yellow
-                $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID)" -NoNewWindow -Wait -PassThru).ExitCode
+                $Date = (get-date -UFormat %Y-%m-%d--%H-%M-%S)
+                $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
+                $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
                 Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Yellow
+                Write-Host "Automate Installer Logs: $LogFullPath" -ForegroundColor Yellow
             }# End Else
         While ($Counter -ne 30) {
             $Counter++
@@ -638,7 +644,7 @@ Param
 BEGIN
 {
     $ErrorActionPreference = "SilentlyContinue"
-	$Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
+    $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
     Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
     $AutomateURLTest = "https://$($Server)/LabTech/"
     Write-Verbose "$AutomateURLTest"
