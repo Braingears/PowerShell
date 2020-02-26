@@ -258,7 +258,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
         Stop-Service ltservice,ltsvcmon -Force
         Write-Verbose "Uninstalling LabTechAD Package"
         Start-Process "msiexec.exe" -ArgumentList "/x {3F460D4C-D217-46B4-80B6-B5ED50BD7CF5} /qn" -NoNewWindow -Wait -PassThru | Out-Null
-        Remove-Item "$($env:windir)\ltsvc" -Recursive -Force
+        Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
         Get-ItemProperty "HKLM:\SOFTWARE\LabTech\LabVNC" | Remove-Item -Recurse -Force
         Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service" | Remove-Item -Recurse -Force
         Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru | Out-Null
