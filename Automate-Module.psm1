@@ -138,8 +138,8 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-Service LTService).Status)
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived).TotalSeconds)
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).TotalSeconds)
+        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived).TotalSeconds)
+        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value ([int]((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).TotalSeconds)
         Write-Verbose $Global:Automate
         If ($Show) {
             $Global:Automate
@@ -470,18 +470,40 @@ Function Install-Automate {
                 Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Yellow
                 Write-Host "Automate Installer Logs: $LogFullPath" -ForegroundColor Yellow
             }# End Else
-        While ($Counter -ne 30) {
-            $Counter++
-            Start-Sleep 10
-            Confirm-Automate -Silent -Verbose:$Verbose
-            If ($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null) {
-                If (!$Silent) {
-                    Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
+        If ($InstallExitCode -eq 0) {
+            While ($Counter -ne 30) {
+                $Counter++
+                Start-Sleep 10
+                Confirm-Automate -Silent -Verbose:$Verbose
+                If ($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null) {
+                    If (!$Silent) {
+                        Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
+                        $Global:Automate
+                    }#end If Silent
+                    Break
+                } # end If
+            }# end While
+        } Else {
+            While ($Counter -ne 3) {
+                $Counter++
+                Start-Sleep 10
+                Confirm-Automate -Silent -Verbose:$Verbose
+                If ($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null) {
+                    If (!$Silent) {
+                        Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
+                        $Global:Automate
+                    }#end If Silent
+                    Break
+                } # end If
+            } # end While
+        } # end If ExitCode 0
+        Confirm-Automate -Silent -Verbose:$Verbose
+        If (!($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null)) {
+            If (!$Silent) {
+                    Write-Host "The Automate Agent FAILED to Install" -ForegroundColor Red
                     $Global:Automate
-                }#end If Silent
-                Break
-            } # end If
-        }# end While
+            }# end If Silent
+        } # end If Not Online
     } # End 
     If ($Transcript) {Stop-Transcript}
 } #End Function Install-Automate
