@@ -269,7 +269,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
                 Write-Verbose "$($App) - Not Installed"
             } Else {
                 Write-Verbose "Uninstalling: $($App) - msiexec /x $($AppLocalPackage) /qn /norestart"
-                Start-Process "msiexec.exe" -ArgumentList "/x $($AppLocalPackage) /qn /norestart" -NoNewWindow -Wait -PassThru | Out-Null
+                msiexec /x $AppLocalPackage /qn /norestart
             }
         }
         Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
