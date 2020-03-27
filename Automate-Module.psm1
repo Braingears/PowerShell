@@ -245,8 +245,8 @@ Confirm-Automate -Silent -Verbose:$Verbose
             Write-Verbose "Automate Uninstall Exit Code: $($UninstallExitCode)"
         }
     }
-    Write-Verbose "Checking For Removal - Loop 3X"
-    While ($Counter -ne 3) {
+    Write-Verbose "Checking For Removal - Loop 5X"
+    While ($Counter -ne 5) {
         $Counter++
         Start-Sleep 10
         Confirm-Automate -Silent -Verbose:$Verbose
@@ -273,8 +273,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
             }
         }
         Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
-        Get-ItemProperty "HKLM:\SOFTWARE\LabTech\LabVNC" | Remove-Item -Recurse -Force
-        Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service" | Remove-Item -Recurse -Force
+        Get-ItemProperty "HKLM:\SOFTWARE\LabTech" | Remove-Item -Recurse -Force
         Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru | Out-Null
         Confirm-Automate -Silent -Verbose:$Verbose
         If ($Global:Automate.InstFolder) {
