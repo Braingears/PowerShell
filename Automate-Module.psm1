@@ -217,6 +217,10 @@ If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((g
     $DownloadPath = "http://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
 }
 $SoftwarePath = "C:\Support\Automate"
+$UninstallApps = @(
+    "ConnectWise Automate Remote Agent"
+    "LabTech® Software Remote Agent"
+    )
 Write-Debug "Checking if Automate Installed"
 Confirm-Automate -Silent -Verbose:$Verbose
     If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or ($Force)) {
@@ -257,7 +261,17 @@ Confirm-Automate -Silent -Verbose:$Verbose
         Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force 
         Stop-Service ltservice,ltsvcmon -Force
         Write-Verbose "Uninstalling LabTechAD Package"
-        Start-Process "msiexec.exe" -ArgumentList "/x {3F460D4C-D217-46B4-80B6-B5ED50BD7CF5} /qn" -NoNewWindow -Wait -PassThru | Out-Null
+        $UninstallApps2 = foreach ($App in $UninstallApps) {Get-WmiObject -Class Win32_Product -ComputerName . | Where-Object -FilterScript {$_.Name -like $App} | Select-Object -ExpandProperty "Name"}
+        $UninstallAppsFound = $UninstallApps2 | Select-Object -Unique
+        foreach ($App in $UninstallAppsFound) {
+            $AppLocalPackage = Get-WmiObject -Class Win32_Product -ComputerName . | Where-Object -FilterScript {$_.Name -like $App} | Select-Object -ExpandProperty "LocalPackage"
+            If ($AppLocalPackage -eq $null) {
+                Write-Verbose "$($App) - Not Installed"
+            } Else {
+                Write-Verbose "Uninstalling: $($App) - msiexec /x $($AppLocalPackage) /qn /norestart"
+                Start-Process "msiexec.exe" -ArgumentList "/x $($AppLocalPackage) /qn /norestart" -NoNewWindow -Wait -PassThru | Out-Null
+            }
+        }
         Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
         Get-ItemProperty "HKLM:\SOFTWARE\LabTech\LabVNC" | Remove-Item -Recurse -Force
         Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service" | Remove-Item -Recurse -Force
@@ -271,7 +285,9 @@ Confirm-Automate -Silent -Verbose:$Verbose
                 Write-Verbose "Automate Uninstall Failed"
                 Write-Verbose "$($env:windir)\ltsvc folder still exists"
             }
-            If ($Global:Automate.InstRegistry) {
+        }
+        If ($Global:Automate.InstRegistry) {
+            If (!$Silent) {
                 Write-Host "Automate Uninstall Failed" -ForegroundColor Red
                 Write-Host "HKLM:\SOFTWARE\LabTech\Service Registry keys still exists" -ForegroundColor Red
             } else {
