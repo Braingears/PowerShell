@@ -250,12 +250,12 @@ Confirm-Automate -Silent -Verbose:$Verbose
         $Counter++
         Start-Sleep 10
         Confirm-Automate -Silent -Verbose:$Verbose
-        If ((!$Global:Automate.InstFolder) -and (!$Global:Automate.InstRegistry)) {
+        If ((!$Global:Automate.InstFolder) -and (!$Global:Automate.InstRegistry) -and ($Global:Automate.Service -eq $Null)) {
             Write-Verbose "Automate Uninstaller Completed Successfully"
             Break
         }
     }# end While
-    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry)) {
+    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or (!($Global:Automate.Service -eq $Null))) {
         Write-Verbose "Uninstaller Failed"
         Write-Verbose "Manually Gutting Automate..."
         Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force 
