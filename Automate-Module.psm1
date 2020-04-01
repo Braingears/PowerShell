@@ -273,7 +273,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
             }
         }
         Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
-        Get-ItemProperty "HKLM:\SOFTWARE\LabTech" | Remove-Item -Recurse -Force
+        REG Delete HKLM\SOFTWARE\LabTech /f
         Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru | Out-Null
         Confirm-Automate -Silent -Verbose:$Verbose
         If ($Global:Automate.InstFolder) {
