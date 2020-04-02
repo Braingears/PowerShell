@@ -267,6 +267,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
         Write-Verbose "Uninstaller Failed"
         Write-Verbose "Manually Gutting Automate..."
         If (!(($Global:Automate.Service -eq $Null) -or ($Global:Automate.Service -eq "Stopped"))) {
+            Write-Verbose "LTService Service not Stopped. Disabling LTService Service"
             Set-Service ltservice -StartupType Disabled
             Stop-Service ltservice,ltsvcmon -Force
         }    
