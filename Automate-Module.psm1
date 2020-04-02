@@ -254,7 +254,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
         }
     }
     Write-Verbose "Checking For Removal - Loop 5X"
-    While ($Counter -ne 5) {
+    While ($Counter -ne 6) {
         $Counter++
         Start-Sleep 10
         Confirm-Automate -Silent -Verbose:$Verbose
@@ -266,8 +266,11 @@ Confirm-Automate -Silent -Verbose:$Verbose
     If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or (!($Global:Automate.Service -eq $Null))) {
         Write-Verbose "Uninstaller Failed"
         Write-Verbose "Manually Gutting Automate..."
+        If (!(($Global:Automate.Service -eq $Null) -or ($Global:Automate.Service -eq "Stopped"))) {
+            Set-Service ltservice -StartupType Disabled
+            Stop-Service ltservice,ltsvcmon -Force
+        }    
         Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force 
-        Stop-Service ltservice,ltsvcmon -Force
         Write-Verbose "Uninstalling LabTechAD Package"
         $UninstallApps2 = foreach ($App in $UninstallApps) {Get-WmiObject -Class Win32_Product -ComputerName . | Where-Object -FilterScript {$_.Name -like $App} | Select-Object -ExpandProperty "Name"}
         $UninstallAppsFound = $UninstallApps2 | Select-Object -Unique
@@ -281,6 +284,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
             }
         }
         Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
+        Get-ItemProperty "HKLM:\SOFTWARE\LabTech" | Remove-Item -Recurse -Force
         REG Delete HKLM\SOFTWARE\LabTech /f | Out-Null
         Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru | Out-Null
         Confirm-Automate -Silent -Verbose:$Verbose
