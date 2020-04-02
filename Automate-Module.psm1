@@ -94,7 +94,11 @@ Function Confirm-Automate {
     Date           : 11/15/2019
     Changes        : Add $Automate.InstFolder and $Automate.InstRegistry and check for both to be consdered for $Automate.Installed
                      It was found that the Automate Uninstaller EXE is leaving behind the LabTech registry keys and it was not being detected properly. 
-                     
+
+    Version        : 1.2    
+    Date           : 04/02/2020
+    Changes        : Add $Automate.Service -eq $null
+                     If the service still exists, the installation is failing with Exit Code 1638.                     
                      
 .EXAMPLE
     Confirm-Automate [-Silent]
@@ -163,7 +167,7 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
         Write-Verbose $Global:Automate
     } #End If Registry Exists
-    If (!$Global:Automate.InstFolder -and !$Global:Automate.InstRegistry) {If ($Silent -eq $False) {Write "Automate is NOT Installed"}}
+    If (!$Global:Automate.InstFolder -and !$Global:Automate.InstRegistry -and ($Global:Automate.Service -eq $Null)) {If ($Silent -eq $False) {Write "Automate is NOT Installed"}}
 } #End Function Confirm-Automate
 ########################
 Set-Alias -Name LTC -Value Confirm-Automate -Description 'Confirm If Automate is running properly'
@@ -195,6 +199,10 @@ Function Uninstall-Automate {
                      It was found that the Automate Uninstaller EXE is leaving behind the LabTech registry keys and it was not being detected properly.
                      If the LTSVC Folder or Registry keys are found after the uninstaller runs, the script now performs a manual gutting via PowerShell.  
                      
+    Version        : 1.2    
+    Date           : 04/02/2020
+    Changes        : Add $Automate.Service -eq $null
+                     If the service still exists, the installation is failing with Exit Code 1638. 
                      
 .EXAMPLE
     Uninstall-Automate [-Silent]
@@ -223,7 +231,7 @@ $UninstallApps = @(
     )
 Write-Debug "Checking if Automate Installed"
 Confirm-Automate -Silent -Verbose:$Verbose
-    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or ($Force)) {
+    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or (!($Global:Automate.Service -eq $Null)) -or ($Force)) {
     $Filename = [System.IO.Path]::GetFileName($DownloadPath)
     $SoftwareFullPath = "$($SoftwarePath)\$Filename"
     If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
@@ -273,7 +281,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
             }
         }
         Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
-        REG Delete HKLM\SOFTWARE\LabTech /f
+        REG Delete HKLM\SOFTWARE\LabTech /f | Out-Null
         Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru | Out-Null
         Confirm-Automate -Silent -Verbose:$Verbose
         If ($Global:Automate.InstFolder) {
@@ -292,6 +300,15 @@ Confirm-Automate -Silent -Verbose:$Verbose
             } else {
                 Write-Verbose "Automate Uninstall Failed"
                 Write-Verbose "HKLM:\SOFTWARE\LabTech\Service Registry keys still exists"
+            }
+        }
+         If (!($Global:Automate.Service -eq $Null)) {
+            If (!$Silent) {
+                Write-Host "Automate Uninstall Failed" -ForegroundColor Red
+                Write-Host "LTService Service still exists" -ForegroundColor Red
+            } else {
+                Write-Verbose "Automate Uninstall Failed"
+                Write-Verbose "LTService Service still exists"
             }
         }
     } Else {
