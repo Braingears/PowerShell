@@ -456,7 +456,7 @@ Function Install-Automate {
         }
     }
     Catch {
-        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessable" -ForegroundColor Red
+        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
         Write-Host "Help: Get-Help Install-Automate -Full"
         Write-Host " "
         Confirm-Automate -Show
@@ -716,7 +716,7 @@ BEGIN
         Write-Verbose "https://$($Server) is Active"
     }
     Catch {
-        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessable" -ForegroundColor Red
+        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
         Write-Host "Help: Get-Help Push-Automate -Full"
         Break
         }
