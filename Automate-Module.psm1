@@ -94,7 +94,11 @@ Function Confirm-Automate {
     Date           : 11/15/2019
     Changes        : Add $Automate.InstFolder and $Automate.InstRegistry and check for both to be consdered for $Automate.Installed
                      It was found that the Automate Uninstaller EXE is leaving behind the LabTech registry keys and it was not being detected properly. 
-                     
+
+    Version        : 1.2    
+    Date           : 04/02/2020
+    Changes        : Add $Automate.Service -eq $null
+                     If the service still exists, the installation is failing with Exit Code 1638.                     
                      
 .EXAMPLE
     Confirm-Automate [-Silent]
@@ -163,7 +167,7 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
         Write-Verbose $Global:Automate
     } #End If Registry Exists
-    If (!$Global:Automate.InstFolder -and !$Global:Automate.InstRegistry) {If ($Silent -eq $False) {Write "Automate is NOT Installed"}}
+    If (!$Global:Automate.InstFolder -and !$Global:Automate.InstRegistry -and ($Global:Automate.Service -eq $Null)) {If ($Silent -eq $False) {Write "Automate is NOT Installed"}}
 } #End Function Confirm-Automate
 ########################
 Set-Alias -Name LTC -Value Confirm-Automate -Description 'Confirm If Automate is running properly'
@@ -195,6 +199,10 @@ Function Uninstall-Automate {
                      It was found that the Automate Uninstaller EXE is leaving behind the LabTech registry keys and it was not being detected properly.
                      If the LTSVC Folder or Registry keys are found after the uninstaller runs, the script now performs a manual gutting via PowerShell.  
                      
+    Version        : 1.2    
+    Date           : 04/02/2020
+    Changes        : Add $Automate.Service -eq $null
+                     If the service still exists, the installation is failing with Exit Code 1638. 
                      
 .EXAMPLE
     Uninstall-Automate [-Silent]
@@ -217,9 +225,13 @@ If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((g
     $DownloadPath = "http://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
 }
 $SoftwarePath = "C:\Support\Automate"
+$UninstallApps = @(
+    "ConnectWise Automate Remote Agent"
+    "LabTech® Software Remote Agent"
+    )
 Write-Debug "Checking if Automate Installed"
 Confirm-Automate -Silent -Verbose:$Verbose
-    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or ($Force)) {
+    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or (!($Global:Automate.Service -eq $Null)) -or ($Force)) {
     $Filename = [System.IO.Path]::GetFileName($DownloadPath)
     $SoftwareFullPath = "$($SoftwarePath)\$Filename"
     If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
@@ -241,26 +253,40 @@ Confirm-Automate -Silent -Verbose:$Verbose
             Write-Verbose "Automate Uninstall Exit Code: $($UninstallExitCode)"
         }
     }
-    Write-Verbose "Checking For Removal - Loop 3X"
-    While ($Counter -ne 3) {
+    Write-Verbose "Checking For Removal - Loop 5X"
+    While ($Counter -ne 6) {
         $Counter++
         Start-Sleep 10
         Confirm-Automate -Silent -Verbose:$Verbose
-        If ((!$Global:Automate.InstFolder) -and (!$Global:Automate.InstRegistry)) {
+        If ((!$Global:Automate.InstFolder) -and (!$Global:Automate.InstRegistry) -and ($Global:Automate.Service -eq $Null)) {
             Write-Verbose "Automate Uninstaller Completed Successfully"
             Break
         }
     }# end While
-    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry)) {
+    If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or (!($Global:Automate.Service -eq $Null))) {
         Write-Verbose "Uninstaller Failed"
         Write-Verbose "Manually Gutting Automate..."
+        If (!(($Global:Automate.Service -eq $Null) -or ($Global:Automate.Service -eq "Stopped"))) {
+            Write-Verbose "LTService Service not Stopped. Disabling LTService Service"
+            Set-Service ltservice -StartupType Disabled
+            Stop-Service ltservice,ltsvcmon -Force
+        }    
         Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force 
-        Stop-Service ltservice,ltsvcmon -Force
         Write-Verbose "Uninstalling LabTechAD Package"
-        Start-Process "msiexec.exe" -ArgumentList "/x {3F460D4C-D217-46B4-80B6-B5ED50BD7CF5} /qn" -NoNewWindow -Wait -PassThru | Out-Null
+        $UninstallApps2 = foreach ($App in $UninstallApps) {Get-WmiObject -Class Win32_Product -ComputerName . | Where-Object -FilterScript {$_.Name -like $App} | Select-Object -ExpandProperty "Name"}
+        $UninstallAppsFound = $UninstallApps2 | Select-Object -Unique
+        foreach ($App in $UninstallAppsFound) {
+            $AppLocalPackage = Get-WmiObject -Class Win32_Product -ComputerName . | Where-Object -FilterScript {$_.Name -like $App} | Select-Object -ExpandProperty "LocalPackage"
+            If ($AppLocalPackage -eq $null) {
+                Write-Verbose "$($App) - Not Installed"
+            } Else {
+                Write-Verbose "Uninstalling: $($App) - msiexec /x $($AppLocalPackage) /qn /norestart"
+                msiexec /x $AppLocalPackage /qn /norestart
+            }
+        }
         Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
-        Get-ItemProperty "HKLM:\SOFTWARE\LabTech\LabVNC" | Remove-Item -Recurse -Force
-        Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service" | Remove-Item -Recurse -Force
+        Get-ItemProperty "HKLM:\SOFTWARE\LabTech" | Remove-Item -Recurse -Force
+        REG Delete HKLM\SOFTWARE\LabTech /f | Out-Null
         Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru | Out-Null
         Confirm-Automate -Silent -Verbose:$Verbose
         If ($Global:Automate.InstFolder) {
@@ -271,12 +297,23 @@ Confirm-Automate -Silent -Verbose:$Verbose
                 Write-Verbose "Automate Uninstall Failed"
                 Write-Verbose "$($env:windir)\ltsvc folder still exists"
             }
-            If ($Global:Automate.InstRegistry) {
+        }
+        If ($Global:Automate.InstRegistry) {
+            If (!$Silent) {
                 Write-Host "Automate Uninstall Failed" -ForegroundColor Red
                 Write-Host "HKLM:\SOFTWARE\LabTech\Service Registry keys still exists" -ForegroundColor Red
             } else {
                 Write-Verbose "Automate Uninstall Failed"
                 Write-Verbose "HKLM:\SOFTWARE\LabTech\Service Registry keys still exists"
+            }
+        }
+         If (!($Global:Automate.Service -eq $Null)) {
+            If (!$Silent) {
+                Write-Host "Automate Uninstall Failed" -ForegroundColor Red
+                Write-Host "LTService Service still exists" -ForegroundColor Red
+            } else {
+                Write-Verbose "Automate Uninstall Failed"
+                Write-Verbose "LTService Service still exists"
             }
         }
     } Else {
@@ -419,7 +456,7 @@ Function Install-Automate {
         }
     }
     Catch {
-        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessable" -ForegroundColor Red
+        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
         Write-Host "Help: Get-Help Install-Automate -Full"
         Write-Host " "
         Confirm-Automate -Show
@@ -679,7 +716,7 @@ BEGIN
         Write-Verbose "https://$($Server) is Active"
     }
     Catch {
-        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessable" -ForegroundColor Red
+        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
         Write-Host "Help: Get-Help Push-Automate -Full"
         Break
         }
