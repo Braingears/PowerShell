@@ -411,6 +411,10 @@ Function Install-Automate {
     Date           : 02/17/2020
     Changes        : Add MSIEXEC Log Files to C:\Windows\Temp\Automate_Agent_(Date).log
 
+    Version        : 1.3
+    Date           : 05/26/2020
+    Changes        : Look for and replace "Enter the server address here" with the actual Automate Server address. 
+
 .EXAMPLE
     Install-Automate -Server 'automate.domain.com' -LocationID 42
     This will install the LabTech agent using the provided Server URL, and LocationID.
@@ -512,6 +516,14 @@ Function Install-Automate {
                 $Counter++
                 Start-Sleep 10
                 Confirm-Automate -Silent -Verbose:$Verbose
+                If ($Global:Automate.Server -like "Enter the server address here*" {
+                    Write-Verbose "The Automate Server Address was not written properly"
+                    Write-Verbose "Manually overwriting the Server Address to: $($AutomateURL)"
+                    Set-ItemProperty -Path HKLM:\SOFTWARE\LabTech\Service 'Server Address' -Value $AutomateURL –Force
+                    Write-Verbose "Restarting LTService after correcting the Server Address"
+                    Get-Service LTService | Where {$_.Status -eq "Running"} | Restart-Service -Force
+                    Confirm-Automate -Silent -Verbose:$Verbose
+                }
                 If ($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null) {
                     If (!$Silent) {
                         Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
@@ -525,6 +537,14 @@ Function Install-Automate {
                 $Counter++
                 Start-Sleep 10
                 Confirm-Automate -Silent -Verbose:$Verbose
+                If ($Global:Automate.Server -like "Enter the server address here*" {
+                    Write-Verbose "The Automate Server Address was not written properly"
+                    Write-Verbose "Manually overwriting the Server Address to: $($AutomateURL)"
+                    Set-ItemProperty -Path HKLM:\SOFTWARE\LabTech\Service 'Server Address' -Value $AutomateURL –Force
+                    Write-Verbose "Restarting LTService after correcting the Server Address"
+                    Get-Service LTService | Where {$_.Status -eq "Running"} | Restart-Service -Force
+                    Confirm-Automate -Silent -Verbose:$Verbose
+                }
                 If ($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null) {
                     If (!$Silent) {
                         Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
