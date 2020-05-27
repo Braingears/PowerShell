@@ -516,7 +516,7 @@ Function Install-Automate {
                 $Counter++
                 Start-Sleep 10
                 Confirm-Automate -Silent -Verbose:$Verbose
-                If ($Global:Automate.Server -like "Enter the server address here*" {
+                If ($Global:Automate.Server -like "Enter the server address here*") {
                     Write-Verbose "The Automate Server Address was not written properly"
                     Write-Verbose "Manually overwriting the Server Address to: $($AutomateURL)"
                     Set-ItemProperty -Path HKLM:\SOFTWARE\LabTech\Service 'Server Address' -Value $AutomateURL –Force
@@ -537,7 +537,7 @@ Function Install-Automate {
                 $Counter++
                 Start-Sleep 10
                 Confirm-Automate -Silent -Verbose:$Verbose
-                If ($Global:Automate.Server -like "Enter the server address here*" {
+                If ($Global:Automate.Server -like "Enter the server address here*") {
                     Write-Verbose "The Automate Server Address was not written properly"
                     Write-Verbose "Manually overwriting the Server Address to: $($AutomateURL)"
                     Set-ItemProperty -Path HKLM:\SOFTWARE\LabTech\Service 'Server Address' -Value $AutomateURL –Force
