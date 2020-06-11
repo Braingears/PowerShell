@@ -479,7 +479,7 @@ Function Install-Automate {
             Write-Host "Current Automate Server: $($Global:Automate.ServerAddress)" -ForegroundColor Red
             Write-Host "New Automate Server:     $($AutomateURL)" -ForegroundColor Green
         } # If Different Server 
-        Write-Verbose "Removing Existing Automate Agent"
+        Write-Verbose "Removing Existing Automate Agent (If Installed)"
         Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
         Write-Verbose "Installing Automate Agent on $($AutomateURL)"
             If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
