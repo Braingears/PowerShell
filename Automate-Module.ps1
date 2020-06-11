@@ -128,7 +128,7 @@ Function Confirm-Automate {
         [switch]$Silent = $False
     )
     $ErrorActionPreference = 'SilentlyContinue'
-    $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((( (Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).TotalSeconds) -lt 600)} Else {Write $False}
+    $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds) -lt 600)} Else {Write $False}
     If (Test-Path "HKLM:\SOFTWARE\LabTech\Service") {
         $Global:Automate = New-Object -TypeName psobject
         $Global:Automate | Add-Member -MemberType NoteProperty -Name ComputerName -Value $env:ComputerName
@@ -142,8 +142,8 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-Service LTService).Status)
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived).TotalSeconds)
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value ([int]((Get-Date) - [System.DateTime](Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus).TotalSeconds)
+        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived)).TotalSeconds)
+        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
         Write-Verbose $Global:Automate
         If ($Show) {
             $Global:Automate
@@ -411,6 +411,10 @@ Function Install-Automate {
     Date           : 02/17/2020
     Changes        : Add MSIEXEC Log Files to C:\Windows\Temp\Automate_Agent_(Date).log
 
+    Version        : 1.3
+    Date           : 05/26/2020
+    Changes        : Look for and replace "Enter the server address here" with the actual Automate Server address. 
+
 .EXAMPLE
     Install-Automate -Server 'automate.domain.com' -LocationID 42
     This will install the LabTech agent using the provided Server URL, and LocationID.
@@ -479,7 +483,7 @@ Function Install-Automate {
             Write-Host "Current Automate Server: $($Global:Automate.ServerAddress)" -ForegroundColor Red
             Write-Host "New Automate Server:     $($AutomateURL)" -ForegroundColor Green
         } # If Different Server 
-        Write-Verbose "Removing Existing Automate Agent"
+        Write-Verbose "Removing Existing Automate Agent (If Installed)"
         Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
         Write-Verbose "Installing Automate Agent on $($AutomateURL)"
             If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
@@ -491,7 +495,7 @@ Function Install-Automate {
             Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force -PassThru
             $Date = (get-date -UFormat %Y-%m-%d_%H-%M-%S)
             $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
-            $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
+            $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
             Write-Verbose "MSIEXEC Log Files: $LogFullPath"
             If ($InstallExitCode -eq 0) {
                 If (!$Silent) {Write-Verbose "The Automate Agent Installer Executed Without Errors"}
@@ -503,7 +507,7 @@ Function Install-Automate {
                 Write-Host "Installer will execute twice (KI 12002617)" -ForegroundColor Yellow
                 $Date = (get-date -UFormat %Y-%m-%d_%H-%M-%S)
                 $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
-                $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
+                $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
                 Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Yellow
                 Write-Host "Automate Installer Logs: $LogFullPath" -ForegroundColor Yellow
             }# End Else
@@ -512,6 +516,14 @@ Function Install-Automate {
                 $Counter++
                 Start-Sleep 10
                 Confirm-Automate -Silent -Verbose:$Verbose
+                If ($Global:Automate.Server -like "Enter the server address here*") {
+                    Write-Verbose "The Automate Server Address was not written properly"
+                    Write-Verbose "Manually overwriting the Server Address to: $($AutomateURL)"
+                    Set-ItemProperty -Path HKLM:\SOFTWARE\LabTech\Service 'Server Address' -Value $AutomateURL –Force
+                    Write-Verbose "Restarting LTService after correcting the Server Address"
+                    Get-Service LTService | Where {$_.Status -eq "Running"} | Restart-Service -Force
+                    Confirm-Automate -Silent -Verbose:$Verbose
+                }
                 If ($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null) {
                     If (!$Silent) {
                         Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
@@ -525,6 +537,14 @@ Function Install-Automate {
                 $Counter++
                 Start-Sleep 10
                 Confirm-Automate -Silent -Verbose:$Verbose
+                If ($Global:Automate.Server -like "Enter the server address here*") {
+                    Write-Verbose "The Automate Server Address was not written properly"
+                    Write-Verbose "Manually overwriting the Server Address to: $($AutomateURL)"
+                    Set-ItemProperty -Path HKLM:\SOFTWARE\LabTech\Service 'Server Address' -Value $AutomateURL –Force
+                    Write-Verbose "Restarting LTService after correcting the Server Address"
+                    Get-Service LTService | Where {$_.Status -eq "Running"} | Restart-Service -Force
+                    Confirm-Automate -Silent -Verbose:$Verbose
+                }
                 If ($Global:Automate.Online -and $Global:Automate.ComputerID -ne $Null) {
                     If (!$Silent) {
                         Write-Host "The Automate Agent Has Been Successfully Installed" -ForegroundColor Green
@@ -901,8 +921,8 @@ PROCESS
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name InstRegistry -Value $True                        
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-WmiObject -ComputerName $Computer -Class Win32_Service -Filter "Name='LTService'" -Credential $Credential -ErrorAction SilentlyContinue -ErrorVariable ProcessErrorWMIC).State)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'HeartbeatLastReceived').Data).TotalSeconds)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value (((Get-Date) - [System.DateTime]($Results | Where-Object -Property Name -eq 'LastSuccessStatus').Data).TotalSeconds)
+                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived)).TotalSeconds)
+                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value ($Global:Automate.InstFolder -and ($Global:Automate.Service -eq "Running"))
                         Write-Verbose $Global:Automate
                         If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
