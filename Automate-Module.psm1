@@ -483,14 +483,21 @@ Function Install-Automate {
             Write-Host "Current Automate Server: $($Global:Automate.ServerAddress)" -ForegroundColor Red
             Write-Host "New Automate Server:     $($AutomateURL)" -ForegroundColor Green
         } # If Different Server 
-        Write-Verbose "Removing Existing Automate Agent"
-        Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
-        Write-Verbose "Installing Automate Agent on $($AutomateURL)"
+        Write-Verbose "Downloading Automate Agent from $($AutomateURL)"
             If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
             Set-Location $SoftwarePath
             If ((test-path $SoftwareFullPath)) {Remove-Item $SoftwareFullPath | Out-Null}
-            $WebClient = New-Object System.Net.WebClient
-            $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
+            Try {
+                $WebClient = New-Object System.Net.WebClient
+                $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
+            }
+            Catch {
+                Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
+                Write-Host "Exiting Installation..."    
+                Exit                
+            }
+            Write-Verbose "Removing Existing Automate Agent"
+            Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
             If (!$Silent) {Write-Host "Installing Automate Agent to $AutomateURL"}
             Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force -PassThru
             $Date = (get-date -UFormat %Y-%m-%d_%H-%M-%S)
