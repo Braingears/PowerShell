@@ -494,7 +494,7 @@ Function Install-Automate {
             Catch {
                 Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
                 Write-Host "Exiting Installation..."    
-                Exit                
+                Break                
             }
             Write-Verbose "Removing Existing Automate Agent"
             Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
