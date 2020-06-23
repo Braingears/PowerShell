@@ -467,7 +467,7 @@ Function Install-Automate {
     Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
     Try {
         If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
-            $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
+            $TestURL = (New-Object Net.WebClient).DownloadString($DownloadPath)
             Write-Verbose "$AutomateURL is Active"
         }
     }
