@@ -430,6 +430,13 @@ Function Install-Automate {
         [AllowNull()]
         [Alias('LID','Location')]
         [int]$LocationID = '1',
+        [Parameter(ValueFromPipelineByPropertyName = $True, Position=1)]
+        [Alias("InstallerToken")]
+        [string[]]$Token = $Null,
+        [Parameter()]
+        [AllowNull()]
+        [Alias("InstallerPath","MSI")]
+        [string[]]$MSIPath = $Null,
         [Parameter()]
         [AllowNull()]
         [switch]$Force,
@@ -449,12 +456,17 @@ Function Install-Automate {
     If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://$($Server)"} Else {$AutomateURL = "http://$($Server)"}
     $AutomateURLTest = "$($AutomateURL)/LabTech/"
     $SoftwarePath = "C:\Support\Automate"
-    $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
+    If ($MSIPath) {
+	    Write-Verbose "Downloading from $($MSIPath)"
+	    $DownloadPath = $MSIPath
+    } Else {
+        $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
+    }		
     $Filename = "Automate_Agent.msi"
     $SoftwareFullPath = "$SoftwarePath\$Filename"
     Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
     Try {
-        If ((get-host).Version.ToString() -ge 3) {
+        If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
             $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
             Write-Verbose "$AutomateURL is Active"
         }
