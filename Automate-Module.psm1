@@ -465,19 +465,19 @@ Function Install-Automate {
     $Filename = "Automate_Agent.msi"
     $SoftwareFullPath = "$SoftwarePath\$Filename"
     Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
-    Try {
-        If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
-            $TestURL = (New-Object Net.WebClient).DownloadString($DownloadPath)
-            Write-Verbose "$AutomateURL is Active"
-        }
-    }
-    Catch {
-        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
-        Write-Host "Help: Get-Help Install-Automate -Full"
-        Write-Host " "
-        Confirm-Automate -Show
-        Break
-        }
+#    Try {
+#        If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
+#            $TestURL = (New-Object Net.WebClient).DownloadString($DownloadPath)
+#            Write-Verbose "$AutomateURL is Active"
+#        }
+#    }
+#    Catch {
+#        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
+#        Write-Host "Help: Get-Help Install-Automate -Full"
+#        Write-Host " "
+#        Confirm-Automate -Show
+#        Break
+#        }
     Confirm-Automate -Silent -Verbose:$Verbose
     Write-Verbose "If ServerAddress matches, the Automate Agent is currently Online, and Not forced to Rip & Replace then Automate is already installed."
     Write-Verbose (($Global:Automate.ServerAddress -like "*$($Server)*") -and ($Global:Automate.Online) -and !($Force))
