@@ -374,6 +374,11 @@ Function Install-Automate {
     Use LocationID to install the Automate Agent directly to the appropieate client's location / site.
     If parameter is not specIfied, it will automatically assign LocationID 1 (New Computers).
 
+.PARAMETER Token
+    Use Token to install the Automate Agent directly to the appropieate client's location / site.
+    If parameter is not specIfied, it will automatically attempt to use direct unauthenticated downloads.
+    This method in blocked after Automate v20.0.6.178 (Patch 6)
+    
 .PARAMETER Force
     This will force the Automate Uninstaller prior to installation.
     Essentually, this will be a fresh install and a fresh check-in to the Automate server.
@@ -415,8 +420,12 @@ Function Install-Automate {
     Date           : 05/26/2020
     Changes        : Look for and replace "Enter the server address here" with the actual Automate Server address. 
 
+    Version        : 1.4
+    Date           : 06/29/2020
+    Changes        : Added Token Parameter for Deployment 
+    
 .EXAMPLE
-    Install-Automate -Server 'automate.domain.com' -LocationID 42
+    Install-Automate -Server 'automate.domain.com' -LocationID 42 -Token adb68881994ed93960346478303476f4
     This will install the LabTech agent using the provided Server URL, and LocationID.
 
 
@@ -426,19 +435,13 @@ Function Install-Automate {
         [Parameter(ValueFromPipelineByPropertyName = $True, Position=0)]
         [Alias("FQDN","Srv")]
         [string[]]$Server = $Null,
-        [Parameter(ValueFromPipelineByPropertyName = $True)]
+        [Parameter(ValueFromPipelineByPropertyName = $True, Position=1)]
         [AllowNull()]
         [Alias('LID','Location')]
         [int]$LocationID = '1',
-        [Parameter(ValueFromPipelineByPropertyName = $True, Position=1)]
+        [Parameter(ValueFromPipelineByPropertyName = $True, Position=2)]
         [Alias("InstallerToken")]
         [string[]]$Token = $Null,
-        [Parameter()]
-        [AllowNull()]
-        [Alias("InstallerPath","MSI")]
-        [string[]]$MSIPath = $Null,
-        [Parameter()]
-        [AllowNull()]
         [switch]$Force,
         [Parameter()]
         [AllowNull()]
@@ -456,28 +459,32 @@ Function Install-Automate {
     If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://$($Server)"} Else {$AutomateURL = "http://$($Server)"}
     $AutomateURLTest = "$($AutomateURL)/LabTech/"
     $SoftwarePath = "C:\Support\Automate"
-    If ($MSIPath) {
-	    Write-Verbose "Downloading from $($MSIPath)"
-	    $DownloadPath = $MSIPath
-    } Else {
+	$DownloadPath = $null
+    If ($Token -ne $null) {
+		$DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
+		Write-Host "DownloadPathToken: $($DownloadPath)"
+	}
+    If ($DownloadPath -eq $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
-    }		
+		Write-Host "DownloadPathOld: $($DownloadPath)"
+    }
+	Write-Verbose "Downloading from $($DownloadPath)"	
     $Filename = "Automate_Agent.msi"
     $SoftwareFullPath = "$SoftwarePath\$Filename"
     Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
-#    Try {
-#        If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
-#            $TestURL = (New-Object Net.WebClient).DownloadString($DownloadPath)
-#            Write-Verbose "$AutomateURL is Active"
-#        }
-#    }
-#    Catch {
-#        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
-#        Write-Host "Help: Get-Help Install-Automate -Full"
-#        Write-Host " "
-#        Confirm-Automate -Show
-#        Break
-#        }
+    Try {
+        If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
+            $TestURL = (New-Object Net.WebClient).DownloadString($DownloadPath)
+            Write-Verbose "$AutomateURL is Active"
+        }
+    }
+    Catch {
+        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible" -ForegroundColor Red
+        Write-Host "Help: Get-Help Install-Automate -Full"
+        Write-Host " "
+        Confirm-Automate -Show
+         Break
+        }
     Confirm-Automate -Silent -Verbose:$Verbose
     Write-Verbose "If ServerAddress matches, the Automate Agent is currently Online, and Not forced to Rip & Replace then Automate is already installed."
     Write-Verbose (($Global:Automate.ServerAddress -like "*$($Server)*") -and ($Global:Automate.Online) -and !($Force))
@@ -499,12 +506,15 @@ Function Install-Automate {
             If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
             Set-Location $SoftwarePath
             If ((test-path $SoftwareFullPath)) {Remove-Item $SoftwareFullPath | Out-Null}
-            Try {
-                $WebClient = New-Object System.Net.WebClient
+			Try {
+                Write-Verbose "Downloading from: $($DownloadPath)"
+				Write-Verbose "Downloading to:   $($SoftwareFullPath)"
+				$WebClient = New-Object System.Net.WebClient
                 $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
+				Write-Verbose "Download Complete"
             }
             Catch {
-                Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
+                Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible" -ForegroundColor Red
                 Write-Host "Exiting Installation..."    
                 Break                
             }
