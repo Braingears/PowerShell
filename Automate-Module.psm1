@@ -462,11 +462,11 @@ Function Install-Automate {
     $DownloadPath = $null
     If ($Token -ne $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
-        Write-Host "DownloadPathToken: $($DownloadPath)"
+        Write-Verbose "DownloadPathToken: $($DownloadPath)"
     }
     If ($DownloadPath -eq $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
-        Write-Host "DownloadPathOld: $($DownloadPath)"
+        Write-Verbose "DownloadPathOld: $($DownloadPath)"
     }
     Write-Verbose "Downloading from $($DownloadPath)"    
     $Filename = "Automate_Agent.msi"
@@ -733,6 +733,9 @@ Param
     [Alias('LID','Location')]
     [int]$LocationID = '1',
     [Parameter()]
+    [Alias("InstallerToken")]
+    [string[]]$Token = $Null,
+    [Parameter()]
     [AllowNull()]
     [Alias('User')]
     [string[]]$Username,
@@ -799,11 +802,12 @@ PROCESS
     $InstallAutomateWinRM = {
         $Server = $Args[0]
         $LocationID = $Args[1]
-        $Force = $Args[2]
-        $Silent = $Args[3]
-        $Transcript = $Args[4]
+        $Token = $Args[2]
+        $Force = $Args[3]
+        $Silent = $Args[4]
+        $Transcript = $Args[5]
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
-        Install-Automate -Server $Server -LocationID $LocationID -Transcript
+        Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript
     }
     $WMICMD = 'powershell.exe -Command "Invoke-Expression(New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1''); '
     $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Transcript"
@@ -818,7 +822,7 @@ PROCESS
     If ($Computer -eq $env:COMPUTERNAME) {
         Write-Verbose "Installing Automate on Local Computer - $Computer"
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
-        Install-Automate -Server $Server -LocationID $LocationID -Show:$Show -Transcript:$Transcript
+        Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Show:$Show -Transcript:$Transcript
     } Else {        # Remote Computer
         If (!$Silent) {Write-Host "$($Time) - Now Checking $($COMPUTER)"}
         Write-Verbose "Ping Connectivity  - Testing..."
@@ -876,7 +880,7 @@ PROCESS
                 If ($WinRMConectivity) {
                     Write-Verbose "WinRM Connectivity - Passed"
                     Write-Verbose "Installing Automate..."
-                    Invoke-Command $COMPUTER -Credential $Credential -ScriptBlock $InstallAutomateWinRM -ArgumentList $Server, $LocationID, $Force, $Silent, $Transcript -ErrorAction SilentlyContinue
+                    Invoke-Command $COMPUTER -Credential $Credential -ScriptBlock $InstallAutomateWinRM -ArgumentList $Server, $LocationID, $Token, $Force, $Silent, $Transcript -ErrorAction SilentlyContinue
                     $Global:Automate = (Invoke-Command $COMPUTER -Credential $Credential -ScriptBlock $CheckAutomateWinRM -ErrorAction SilentlyContinue)
                     Write-Verbose "Local Automate:  $($Automate)" 
                     Write-Verbose "Global Automate: $($Global:Automate)"
