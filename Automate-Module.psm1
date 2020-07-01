@@ -320,7 +320,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
         If (!$Silent) {Write-Host "The Automate Agent Uninstalled Successfully" -ForegroundColor Green}
         Write-Verbose "The Automate Agent Uninstalled Successfully"
     }
-} # If Test-Install
+} # If Test Install
     Confirm-Automate -Silent:$Silent
 } # Function Uninstall-Automate
 ########################
@@ -810,7 +810,7 @@ PROCESS
         Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript
     }
     $WMICMD = 'powershell.exe -Command "Invoke-Expression(New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1''); '
-    $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Transcript"
+    $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript"
     $WMIArg = Write-Output "$WMICMD$WMIPOSH"""
     $WinRMConectivity = "N/A"
     $WMICConectivity = "N/A"
