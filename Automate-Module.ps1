@@ -142,8 +142,12 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-Service LTService).Status)
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent)).TotalSeconds)
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value    ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+        if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent) {
+            $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent)).TotalSeconds)
+        }
+        if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus) {
+            $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value    ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+        }
         Write-Verbose $Global:Automate
         If ($Show) {
             $Global:Automate
@@ -320,7 +324,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
         If (!$Silent) {Write-Host "The Automate Agent Uninstalled Successfully" -ForegroundColor Green}
         Write-Verbose "The Automate Agent Uninstalled Successfully"
     }
-} # If Test-Install
+} # If Test Install
     Confirm-Automate -Silent:$Silent
 } # Function Uninstall-Automate
 ########################
@@ -810,7 +814,7 @@ PROCESS
         Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript
     }
     $WMICMD = 'powershell.exe -Command "Invoke-Expression(New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1''); '
-    $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Transcript"
+    $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript"
     $WMIArg = Write-Output "$WMICMD$WMIPOSH"""
     $WinRMConectivity = "N/A"
     $WMICConectivity = "N/A"
@@ -954,8 +958,12 @@ PROCESS
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name InstRegistry -Value $True                        
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-WmiObject -ComputerName $Computer -Class Win32_Service -Filter "Name='LTService'" -Credential $Credential -ErrorAction SilentlyContinue -ErrorVariable ProcessErrorWMIC).State)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent)).TotalSeconds)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+                        if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent) {
+                            $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent)).TotalSeconds)
+                        }
+                        if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus) {
+                            $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value    ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+                        }
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value ($Global:Automate.InstFolder -and ($Global:Automate.Service -eq "Running"))
                         Write-Verbose $Global:Automate
                         If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
