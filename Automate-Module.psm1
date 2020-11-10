@@ -470,6 +470,7 @@ Function Install-Automate {
     }
     If ($DownloadPath -eq $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
+        Write-Host "The -Token Parameters Was Not Entered" -ForegroundColor Red
         Write-Verbose "DownloadPathOld: $($DownloadPath)"
     }
     Write-Verbose "Downloading from $($DownloadPath)"    
@@ -483,7 +484,8 @@ Function Install-Automate {
         }
     }
     Catch {
-        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible" -ForegroundColor Red
+        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible. Failed to Download:" -ForegroundColor Red
+        Write-Host $DownloadPath -ForegroundColor Red
         Write-Host "Help: Get-Help Install-Automate -Full"
         Write-Host " "
         Confirm-Automate -Show
