@@ -629,14 +629,14 @@ Function Push-Automate
     
     Example:
     To push a single Automate Agent:
-    Push-Automate -Computer 'Computername' -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Push-Automate -Computer 'Computername' -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     
     For multiple computers, use a | "pipe" into Push-Automate function:
-    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     - or - 
-    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     - or - 
-    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     
     When pushing to multiple computers, use the actual computer names. If you use IP Address, it will fail when using WINRM Protocols (and use WMI/RCP instead).
                     
@@ -648,7 +648,7 @@ Function Push-Automate
 .PARAMETER LocationID
     Use LocationID to install the Automate Agent directly to the appropieate client's location / site.
     If parameter is not specIfied, it will automatically assign LocationID 1 (New Computers).
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4
 
 .PARAMETER Username
     Enter username with Domain Admin rights. When entering username, use 'DOMAIN\USERNAME'
@@ -665,21 +665,21 @@ Function Push-Automate
     This will force the Automate Uninstaller prior to installation.
     Essentually, this will be a fresh install and a fresh check-in to the Automate server.
     
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Force
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Force
 
 .PARAMETER Silent
     >>> This Function Is Currently Disabled <<<
     This will hide all output (except a failed installation when Exit Code -ne 0)
     The function will exit once the installer has completed.
         
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Silent
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Silent
     
 .PARAMETER Transcript
     >>> This Function Is Currently Disabled <<<
     This parameter will save the entire transcript and responsed to:
     $($env:windir)\Temp\AutomateLogon.txt
         
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Transcript -Verbose
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Transcript -Verbose
 
 .LINK
     https://github.com/Braingears/PowerShell
@@ -698,29 +698,29 @@ Function Push-Automate
                      
                      
 .EXAMPLE
-    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Computer
+    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4 -Computer COMPUTERNAME
     
     Use the -Computer parameter for single computers. 
     
 .EXAMPLE
-    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     Use Array to pipe multiple computers into Push=Automate function. 
     
 .EXAMPLE
-    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     Use another function to pipe multiple computers into Push=Automate function. Select only computer names. 
 
 .EXAMPLE
-    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     When pushing to multiple computers, use the actual computer names. If you use IP Address, it will fail when using WINRM Protocols (and use WMI/RCP instead).
     This will install the LabTech agent using the provided Server URL, and LocationID.
 
 .EXAMPLE
     $Credential = Get-Credential
-    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2
+    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4
     
     You can proactivly load PSCredential, then use the Push-Automate function within the same Powershell session. 
 
