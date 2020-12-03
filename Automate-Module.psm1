@@ -142,8 +142,12 @@ Function Confirm-Automate {
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-Service LTService).Status)
         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value $Online
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived)).TotalSeconds)
-        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+        if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent) {
+            $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent)).TotalSeconds)
+        }
+        if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus) {
+            $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value    ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+        }
         Write-Verbose $Global:Automate
         If ($Show) {
             $Global:Automate
@@ -285,8 +289,8 @@ Confirm-Automate -Silent -Verbose:$Verbose
             }
         }
         Remove-Item "$($env:windir)\ltsvc" -Recurse -Force
-        Get-ItemProperty "HKLM:\SOFTWARE\LabTech" | Remove-Item -Recurse -Force
-        REG Delete HKLM\SOFTWARE\LabTech /f | Out-Null
+        Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service" | Remove-Item -Recurse -Force
+        REG Delete HKLM\SOFTWARE\LabTech\Service /f | Out-Null
         Start-Process "cmd" -ArgumentList "/c $($SoftwareFullPath)" -NoNewWindow -Wait -PassThru | Out-Null
         Confirm-Automate -Silent -Verbose:$Verbose
         If ($Global:Automate.InstFolder) {
@@ -320,7 +324,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
         If (!$Silent) {Write-Host "The Automate Agent Uninstalled Successfully" -ForegroundColor Green}
         Write-Verbose "The Automate Agent Uninstalled Successfully"
     }
-} # If Test-Install
+} # If Test Install
     Confirm-Automate -Silent:$Silent
 } # Function Uninstall-Automate
 ########################
@@ -459,27 +463,29 @@ Function Install-Automate {
     If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://$($Server)"} Else {$AutomateURL = "http://$($Server)"}
     $AutomateURLTest = "$($AutomateURL)/LabTech/"
     $SoftwarePath = "C:\Support\Automate"
-	$DownloadPath = $null
+    $DownloadPath = $null
     If ($Token -ne $null) {
-		$DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
-		Write-Host "DownloadPathToken: $($DownloadPath)"
-	}
+        $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
+        Write-Verbose "DownloadPathToken: $($DownloadPath)"
+    }
     If ($DownloadPath -eq $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
-		Write-Host "DownloadPathOld: $($DownloadPath)"
+        Write-Host "The -Token Parameters Was Not Entered" -ForegroundColor Red
+        Write-Verbose "DownloadPathOld: $($DownloadPath)"
     }
-	Write-Verbose "Downloading from $($DownloadPath)"	
+    Write-Verbose "Downloading from $($DownloadPath)"    
     $Filename = "Automate_Agent.msi"
     $SoftwareFullPath = "$SoftwarePath\$Filename"
     Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
     Try {
-        If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
+        If ((get-host).Version.ToString() -ge 5 -and (!$Installer)) {
             $TestURL = (New-Object Net.WebClient).DownloadString($DownloadPath)
             Write-Verbose "$AutomateURL is Active"
         }
     }
     Catch {
-        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible" -ForegroundColor Red
+        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible. Failed to Download:" -ForegroundColor Red
+        Write-Host $DownloadPath -ForegroundColor Red
         Write-Host "Help: Get-Help Install-Automate -Full"
         Write-Host " "
         Confirm-Automate -Show
@@ -506,12 +512,12 @@ Function Install-Automate {
             If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
             Set-Location $SoftwarePath
             If ((test-path $SoftwareFullPath)) {Remove-Item $SoftwareFullPath | Out-Null}
-			Try {
+            Try {
                 Write-Verbose "Downloading from: $($DownloadPath)"
-				Write-Verbose "Downloading to:   $($SoftwareFullPath)"
-				$WebClient = New-Object System.Net.WebClient
+                Write-Verbose "Downloading to:   $($SoftwareFullPath)"
+                $WebClient = New-Object System.Net.WebClient
                 $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
-				Write-Verbose "Download Complete"
+                Write-Verbose "Download Complete"
             }
             Catch {
                 Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible" -ForegroundColor Red
@@ -623,14 +629,14 @@ Function Push-Automate
     
     Example:
     To push a single Automate Agent:
-    Push-Automate -Computer 'Computername' -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Push-Automate -Computer 'Computername' -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     
     For multiple computers, use a | "pipe" into Push-Automate function:
-    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     - or - 
-    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     - or - 
-    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     
     When pushing to multiple computers, use the actual computer names. If you use IP Address, it will fail when using WINRM Protocols (and use WMI/RCP instead).
                     
@@ -642,7 +648,7 @@ Function Push-Automate
 .PARAMETER LocationID
     Use LocationID to install the Automate Agent directly to the appropieate client's location / site.
     If parameter is not specIfied, it will automatically assign LocationID 1 (New Computers).
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4
 
 .PARAMETER Username
     Enter username with Domain Admin rights. When entering username, use 'DOMAIN\USERNAME'
@@ -659,21 +665,21 @@ Function Push-Automate
     This will force the Automate Uninstaller prior to installation.
     Essentually, this will be a fresh install and a fresh check-in to the Automate server.
     
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Force
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Force
 
 .PARAMETER Silent
     >>> This Function Is Currently Disabled <<<
     This will hide all output (except a failed installation when Exit Code -ne 0)
     The function will exit once the installer has completed.
         
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Silent
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Silent
     
 .PARAMETER Transcript
     >>> This Function Is Currently Disabled <<<
     This parameter will save the entire transcript and responsed to:
     $($env:windir)\Temp\AutomateLogon.txt
         
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Transcript -Verbose
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Transcript -Verbose
 
 .LINK
     https://github.com/Braingears/PowerShell
@@ -692,29 +698,29 @@ Function Push-Automate
                      
                      
 .EXAMPLE
-    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Computer
+    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4 -Computer COMPUTERNAME
     
     Use the -Computer parameter for single computers. 
     
 .EXAMPLE
-    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     Use Array to pipe multiple computers into Push=Automate function. 
     
 .EXAMPLE
-    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     Use another function to pipe multiple computers into Push=Automate function. Select only computer names. 
 
 .EXAMPLE
-    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     When pushing to multiple computers, use the actual computer names. If you use IP Address, it will fail when using WINRM Protocols (and use WMI/RCP instead).
     This will install the LabTech agent using the provided Server URL, and LocationID.
 
 .EXAMPLE
     $Credential = Get-Credential
-    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2
+    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4
     
     You can proactivly load PSCredential, then use the Push-Automate function within the same Powershell session. 
 
@@ -732,6 +738,9 @@ Param
     [AllowNull()]
     [Alias('LID','Location')]
     [int]$LocationID = '1',
+    [Parameter()]
+    [Alias("InstallerToken")]
+    [string[]]$Token = $Null,
     [Parameter()]
     [AllowNull()]
     [Alias('User')]
@@ -799,14 +808,15 @@ PROCESS
     $InstallAutomateWinRM = {
         $Server = $Args[0]
         $LocationID = $Args[1]
-        $Force = $Args[2]
-        $Silent = $Args[3]
-        $Transcript = $Args[4]
+        $Token = $Args[2]
+        $Force = $Args[3]
+        $Silent = $Args[4]
+        $Transcript = $Args[5]
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
-        Install-Automate -Server $Server -LocationID $LocationID -Transcript
+        Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript
     }
     $WMICMD = 'powershell.exe -Command "Invoke-Expression(New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1''); '
-    $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Transcript"
+    $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript"
     $WMIArg = Write-Output "$WMICMD$WMIPOSH"""
     $WinRMConectivity = "N/A"
     $WMICConectivity = "N/A"
@@ -818,7 +828,7 @@ PROCESS
     If ($Computer -eq $env:COMPUTERNAME) {
         Write-Verbose "Installing Automate on Local Computer - $Computer"
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
-        Install-Automate -Server $Server -LocationID $LocationID -Show:$Show -Transcript:$Transcript
+        Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Show:$Show -Transcript:$Transcript
     } Else {        # Remote Computer
         If (!$Silent) {Write-Host "$($Time) - Now Checking $($COMPUTER)"}
         Write-Verbose "Ping Connectivity  - Testing..."
@@ -876,7 +886,7 @@ PROCESS
                 If ($WinRMConectivity) {
                     Write-Verbose "WinRM Connectivity - Passed"
                     Write-Verbose "Installing Automate..."
-                    Invoke-Command $COMPUTER -Credential $Credential -ScriptBlock $InstallAutomateWinRM -ArgumentList $Server, $LocationID, $Force, $Silent, $Transcript -ErrorAction SilentlyContinue
+                    Invoke-Command $COMPUTER -Credential $Credential -ScriptBlock $InstallAutomateWinRM -ArgumentList $Server, $LocationID, $Token, $Force, $Silent, $Transcript -ErrorAction SilentlyContinue
                     $Global:Automate = (Invoke-Command $COMPUTER -Credential $Credential -ScriptBlock $CheckAutomateWinRM -ErrorAction SilentlyContinue)
                     Write-Verbose "Local Automate:  $($Automate)" 
                     Write-Verbose "Global Automate: $($Global:Automate)"
@@ -950,8 +960,12 @@ PROCESS
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name InstRegistry -Value $True                        
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Installed -Value (Test-Path "$($env:windir)\ltsvc")
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Service -Value ((Get-WmiObject -ComputerName $Computer -Class Win32_Service -Filter "Name='LTService'" -Credential $Credential -ErrorAction SilentlyContinue -ErrorVariable ProcessErrorWMIC).State)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastReceived)).TotalSeconds)
-                        $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+                        if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent) {
+                            $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").HeartbeatLastSent)).TotalSeconds)
+                        }
+                        if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus) {
+                            $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value    ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+                        }
                         $Global:Automate | Add-Member -MemberType NoteProperty -Name Online -Value ($Global:Automate.InstFolder -and ($Global:Automate.Service -eq "Running"))
                         Write-Verbose $Global:Automate
                         If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
