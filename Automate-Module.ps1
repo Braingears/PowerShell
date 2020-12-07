@@ -128,7 +128,10 @@ Function Confirm-Automate {
         [switch]$Silent = $False
     )
     $ErrorActionPreference = 'SilentlyContinue'
-    $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds) -lt 600)} Else {Write $False}
+	if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus) {
+        $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds) -lt 600)} Else {Write $False}
+    } else {$Online = $False}
+
     If (Test-Path "HKLM:\SOFTWARE\LabTech\Service") {
         $Global:Automate = New-Object -TypeName psobject
         $Global:Automate | Add-Member -MemberType NoteProperty -Name ComputerName -Value $env:ComputerName
@@ -223,7 +226,7 @@ Function Uninstall-Automate {
 $ErrorActionPreference = 'SilentlyContinue'
 $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
 $DownloadPath = "https://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
-If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {
+If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {
     $DownloadPath = "https://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
 } Else {
     $DownloadPath = "http://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
@@ -460,7 +463,7 @@ Function Install-Automate {
     $Error.Clear()
     If ($Transcript) {Start-Transcript -Path "$($env:windir)\Temp\Automate_Deploy.txt" -Force}
     Write-Verbose "Checking Operating System (WinXP and Older) for HTTP vs HTTPS"
-    If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://$($Server)"} Else {$AutomateURL = "http://$($Server)"}
+    If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://$($Server)"} Else {$AutomateURL = "http://$($Server)"}
     $AutomateURLTest = "$($AutomateURL)/LabTech/"
     $SoftwarePath = "C:\Support\Automate"
     $DownloadPath = $null
@@ -470,6 +473,7 @@ Function Install-Automate {
     }
     If ($DownloadPath -eq $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
+        Write-Host "The -Token Parameters Was Not Entered" -ForegroundColor Red
         Write-Verbose "DownloadPathOld: $($DownloadPath)"
     }
     Write-Verbose "Downloading from $($DownloadPath)"    
@@ -483,7 +487,8 @@ Function Install-Automate {
         }
     }
     Catch {
-        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible" -ForegroundColor Red
+        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible. Failed to Download:" -ForegroundColor Red
+        Write-Host "$($DownloadPath)" -ForegroundColor Red
         Write-Host "Help: Get-Help Install-Automate -Full"
         Write-Host " "
         Confirm-Automate -Show
@@ -497,7 +502,7 @@ Function Install-Automate {
             If ($Show) {
               $Global:Automate
             } Else {
-              Write-Host "The Automate Agent is already installed and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
+              Write-Host "The Automate Agent is already installed on $($Global:Automate.Computername) ($($Global:Automate.ComputerID)) and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
             }
         }
     } Else {
@@ -627,14 +632,14 @@ Function Push-Automate
     
     Example:
     To push a single Automate Agent:
-    Push-Automate -Computer 'Computername' -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Push-Automate -Computer 'Computername' -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     
     For multiple computers, use a | "pipe" into Push-Automate function:
-    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     - or - 
-    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     - or - 
-    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     
     When pushing to multiple computers, use the actual computer names. If you use IP Address, it will fail when using WINRM Protocols (and use WMI/RCP instead).
                     
@@ -646,7 +651,7 @@ Function Push-Automate
 .PARAMETER LocationID
     Use LocationID to install the Automate Agent directly to the appropieate client's location / site.
     If parameter is not specIfied, it will automatically assign LocationID 1 (New Computers).
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4
 
 .PARAMETER Username
     Enter username with Domain Admin rights. When entering username, use 'DOMAIN\USERNAME'
@@ -663,21 +668,21 @@ Function Push-Automate
     This will force the Automate Uninstaller prior to installation.
     Essentually, this will be a fresh install and a fresh check-in to the Automate server.
     
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Force
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Force
 
 .PARAMETER Silent
     >>> This Function Is Currently Disabled <<<
     This will hide all output (except a failed installation when Exit Code -ne 0)
     The function will exit once the installer has completed.
         
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Silent
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Silent
     
 .PARAMETER Transcript
     >>> This Function Is Currently Disabled <<<
     This parameter will save the entire transcript and responsed to:
     $($env:windir)\Temp\AutomateLogon.txt
         
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Transcript -Verbose
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token adb68881994ed93960346478303476f4 -Transcript -Verbose
 
 .LINK
     https://github.com/Braingears/PowerShell
@@ -696,29 +701,29 @@ Function Push-Automate
                      
                      
 .EXAMPLE
-    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Computer
+    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4 -Computer COMPUTERNAME
     
     Use the -Computer parameter for single computers. 
     
 .EXAMPLE
-    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     Use Array to pipe multiple computers into Push=Automate function. 
     
 .EXAMPLE
-    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     Use another function to pipe multiple computers into Push=Automate function. Select only computer names. 
 
 .EXAMPLE
-    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd' -Token adb68881994ed93960346478303476f4
     
     When pushing to multiple computers, use the actual computer names. If you use IP Address, it will fail when using WINRM Protocols (and use WMI/RCP instead).
     This will install the LabTech agent using the provided Server URL, and LocationID.
 
 .EXAMPLE
     $Credential = Get-Credential
-    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2
+    Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token adb68881994ed93960346478303476f4
     
     You can proactivly load PSCredential, then use the Push-Automate function within the same Powershell session. 
 
@@ -878,7 +883,7 @@ PROCESS
                 If ($Show) {
                     $Global:Automate
                 } Else {
-                    Write-Host "The Automate Agent is already installed and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
+                    Write-Host "The Automate Agent is already installed on $($Global:Automate.Computername) ($($Global:Automate.ComputerID)) and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
                 }
             } Else {
                 If ($WinRMConectivity) {
@@ -970,7 +975,7 @@ PROCESS
                             If ($Show) {
                                 $Global:Automate
                             } Else {
-                                Write-Host "The Automate Agent is already installed and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
+                                Write-Host "The Automate Agent is already installed on $($Global:Automate.Computername) ($($Global:Automate.ComputerID)) and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
                             }
                         } Else {
                             IF (!($Global:Automate.ServerAddress -like "*$($Server)*")) {
