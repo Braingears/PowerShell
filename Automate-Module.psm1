@@ -464,8 +464,9 @@ Function Install-Automate {
     If ($Transcript) {Start-Transcript -Path "$($env:windir)\Temp\Automate_Deploy.txt" -Force}
     Write-Verbose "Checking Operating System (WinXP and Older) for HTTP vs HTTPS"
     If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://$($Server)"} Else {$AutomateURL = "http://$($Server)"}
-    $AutomateURLTest = "$($AutomateURL)/LabTech/"
     $SoftwarePath = "C:\Support\Automate"
+    $Filename = "Automate_Agent.msi"
+    $SoftwareFullPath = "$SoftwarePath\$Filename"
     $DownloadPath = $null
     If ($Token -ne $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
@@ -476,9 +477,7 @@ Function Install-Automate {
         Write-Host "The -Token Parameters Was Not Entered" -ForegroundColor Red
         Write-Verbose "DownloadPathOld: $($DownloadPath)"
     }
-    Write-Verbose "Downloading from $($DownloadPath)"    
-    $Filename = "Automate_Agent.msi"
-    $SoftwareFullPath = "$SoftwarePath\$Filename"
+    Write-Verbose "Downloading from $($DownloadPath)"
     Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
     Try {
         If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
@@ -769,12 +768,13 @@ BEGIN
 {
     $ErrorActionPreference = "SilentlyContinue"
     $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
-    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
-    $AutomateURLTest = "https://$($Server)/LabTech/"
+    If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://" + $Server} Else {$AutomateURL = "http://" + $Server}
+    $AutomateURLTest = $AutomateURL +"/LabTech/"
+    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"	
     Write-Verbose "$AutomateURLTest"
     Try {
         $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
-        Write-Verbose "https://$($Server) is Active"
+        Write-Verbose "$($AutomateURL) is Active"
     }
     Catch {
         Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
