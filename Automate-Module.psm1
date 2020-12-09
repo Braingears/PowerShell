@@ -128,7 +128,10 @@ Function Confirm-Automate {
         [switch]$Silent = $False
     )
     $ErrorActionPreference = 'SilentlyContinue'
-    $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds) -lt 600)} Else {Write $False}
+    if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus) {
+        $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds) -lt 600)} Else {Write $False}
+    } else {$Online = $False}
+
     If (Test-Path "HKLM:\SOFTWARE\LabTech\Service") {
         $Global:Automate = New-Object -TypeName psobject
         $Global:Automate | Add-Member -MemberType NoteProperty -Name ComputerName -Value $env:ComputerName
@@ -223,7 +226,7 @@ Function Uninstall-Automate {
 $ErrorActionPreference = 'SilentlyContinue'
 $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
 $DownloadPath = "https://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
-If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {
+If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {
     $DownloadPath = "https://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
 } Else {
     $DownloadPath = "http://s3.amazonaws.com/assets-cp/assets/Agent_Uninstall.exe"
@@ -459,38 +462,54 @@ Function Install-Automate {
     $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
     $Error.Clear()
     If ($Transcript) {Start-Transcript -Path "$($env:windir)\Temp\Automate_Deploy.txt" -Force}
-    Write-Verbose "Checking Operating System (WinXP and Older) for HTTP vs HTTPS"
-    If (([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://$($Server)"} Else {$AutomateURL = "http://$($Server)"}
-    $AutomateURLTest = "$($AutomateURL)/LabTech/"
+    $SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol
     $SoftwarePath = "C:\Support\Automate"
+    $Filename = "Automate_Agent.msi"
+    $SoftwareFullPath = "$SoftwarePath\$Filename"
+    $AutomateURL = "https://$($Server)"
+    
+    Write-Verbose "Checking Operating System (WinXP and Older)"
+    If ([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -lt 6000) {
+        $OS = ((Get-WmiObject Win32_OperatingSystem).Caption)
+        Write-Host "This computer is running $($OS), and is no longer officially supported by ConnectWise Automate" -ForegroundColor Red
+        Write-Host "https://docs.connectwise.com/ConnectWise_Automate/ConnectWise_Automate_Supportability_Statements/Supportability_Statement:_Windows_XP_and_Server_2003_End_of_Life" -ForegroundColor Red
+        Write-Host ""
+        $AutomateURL = "https://$($Server)"
+    }
+    
+    Try {
+        Write-Verbose "Enabling downloads to use SSL/TLS v1.2"
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    }
+    Catch {
+        Write-Verbose "Failed to enable SSL/TLS v1.2"
+        Write-Host "This computer is not configured for SSL/TLS v1.2" -ForegroundColor Red
+        Write-Host "https://docs.connectwise.com/ConnectWise_Automate/ConnectWise_Automate_Supportability_Statements/Supportability_Statement:_TLS_1.0_and_1.1_Protocols_Unsupported" -ForegroundColor Red
+        Write-Host ""
+        $AutomateURL = "https://$($Server)"
+    }
+    
+    Try {
+        $AutomateURLTest = "$($AutomateURL)/LabTech/"
+        $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
+        Write-Verbose "$AutomateURL is Active"
+    }
+    Catch {
+        Write-Verbose "Could not download from $($AutomateURL). Switching to http://$($Server)"
+        $AutomateURL = "http://$($Server)"
+    }
+    
     $DownloadPath = $null
     If ($Token -ne $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
-        Write-Verbose "DownloadPathToken: $($DownloadPath)"
+        Write-Verbose "Downloading from: $($DownloadPath)"
     }
-    If ($DownloadPath -eq $null) {
+    else {
+        Write-Verbose "A -Token <String[]> was not entered"
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
-        Write-Host "The -Token Parameters Was Not Entered" -ForegroundColor Red
-        Write-Verbose "DownloadPathOld: $($DownloadPath)"
-    }
-    Write-Verbose "Downloading from $($DownloadPath)"    
-    $Filename = "Automate_Agent.msi"
-    $SoftwareFullPath = "$SoftwarePath\$Filename"
-    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
-    Try {
-        If ((get-host).Version.ToString() -ge 5 -and (!$Installer)) {
-            $TestURL = (New-Object Net.WebClient).DownloadString($DownloadPath)
-            Write-Verbose "$AutomateURL is Active"
-        }
-    }
-    Catch {
-        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible. Failed to Download:" -ForegroundColor Red
-        Write-Host $DownloadPath -ForegroundColor Red
-        Write-Host "Help: Get-Help Install-Automate -Full"
-        Write-Host " "
-        Confirm-Automate -Show
-         Break
-        }
+        Write-Verbose "Downloading from (Old): $($DownloadPath)"
+    }   
+        
     Confirm-Automate -Silent -Verbose:$Verbose
     Write-Verbose "If ServerAddress matches, the Automate Agent is currently Online, and Not forced to Rip & Replace then Automate is already installed."
     Write-Verbose (($Global:Automate.ServerAddress -like "*$($Server)*") -and ($Global:Automate.Online) -and !($Force))
@@ -520,10 +539,13 @@ Function Install-Automate {
                 Write-Verbose "Download Complete"
             }
             Catch {
-                Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible" -ForegroundColor Red
+                Write-Host "The Automate Server was inaccessible or the Token Parameters were not entered or valid. Failed to Download:" -ForegroundColor Red
+                Write-Host $DownloadPath -ForegroundColor Red
+                Write-Host "Help: Get-Help Install-Automate -Full"
                 Write-Host "Exiting Installation..."    
                 Break                
             }
+            
             Write-Verbose "Removing Existing Automate Agent"
             Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
             If (!$Silent) {Write-Host "Installing Automate Agent to $AutomateURL"}
@@ -766,12 +788,13 @@ BEGIN
 {
     $ErrorActionPreference = "SilentlyContinue"
     $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
-    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
-    $AutomateURLTest = "https://$($Server)/LabTech/"
+    If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://" + $Server} Else {$AutomateURL = "http://" + $Server}
+    $AutomateURLTest = $AutomateURL +"/LabTech/"
+    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"    
     Write-Verbose "$AutomateURLTest"
     Try {
         $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
-        Write-Verbose "https://$($Server) is Active"
+        Write-Verbose "$($AutomateURL) is Active"
     }
     Catch {
         Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
@@ -880,7 +903,7 @@ PROCESS
                 If ($Show) {
                     $Global:Automate
                 } Else {
-                    Write-Host "The Automate Agent is already installed and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
+                    Write-Host "The Automate Agent is already installed on $($Global:Automate.Computername) ($($Global:Automate.ComputerID)) and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
                 }
             } Else {
                 If ($WinRMConectivity) {
@@ -972,7 +995,7 @@ PROCESS
                             If ($Show) {
                                 $Global:Automate
                             } Else {
-                                Write-Host "The Automate Agent is already installed and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
+                                Write-Host "The Automate Agent is already installed on $($Global:Automate.Computername) ($($Global:Automate.ComputerID)) and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
                             }
                         } Else {
                             IF (!($Global:Automate.ServerAddress -like "*$($Server)*")) {
