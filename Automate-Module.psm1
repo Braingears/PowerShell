@@ -518,7 +518,7 @@ Function Install-Automate {
             If ($Show) {
               $Global:Automate
             } Else {
-              Write-Host "The Automate Agent is already installed and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
+              Write-Host "The Automate Agent is already installed on $($Global:Automate.Computername) ($($Global:Automate.ComputerID)) and checked-in $($Global:Automate.LastStatus) seconds ago to $($Global:Automate.ServerAddress)" -ForegroundColor Green
             }
         }
     } Else {
@@ -790,7 +790,7 @@ BEGIN
     $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
     If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://" + $Server} Else {$AutomateURL = "http://" + $Server}
     $AutomateURLTest = $AutomateURL +"/LabTech/"
-    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"    
+    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
     Write-Verbose "$AutomateURLTest"
     Try {
         $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
