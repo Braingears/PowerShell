@@ -479,7 +479,7 @@ Function Install-Automate {
     
     Try {
         Write-Verbose "Enabling downloads to use SSL/TLS v1.2"
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
     }
     Catch {
         Write-Verbose "Failed to enable SSL/TLS v1.2"
@@ -802,7 +802,7 @@ BEGIN
     
     Try {
         Write-Verbose "Enabling downloads to use SSL/TLS v1.2"
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
     }
     Catch {
         Write-Verbose "Failed to enable SSL/TLS v1.2"
@@ -856,6 +856,7 @@ PROCESS
     $Time = Date
     $CheckAutomateWinRM = {
         Write-Verbose "Invoke Confirm-Automate -Silent"
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
         Confirm-Automate -Silent
         Write $Global:Automate
@@ -867,10 +868,11 @@ PROCESS
         $Force = $Args[3]
         $Silent = $Args[4]
         $Transcript = $Args[5]
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
         Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript
     }
-    $WMICMD = 'powershell.exe -Command "Invoke-Expression(New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1''); '
+    $WMICMD = 'powershell.exe -Command "[Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072); Invoke-Expression(New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1''); '
     $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript"
     $WMIArg = Write-Output "$WMICMD$WMIPOSH"""
     $WinRMConectivity = "N/A"
@@ -882,6 +884,7 @@ PROCESS
     # Now Trying WinRM 
     If ($Computer -eq $env:COMPUTERNAME) {
         Write-Verbose "Installing Automate on Local Computer - $Computer"
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
         Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Show:$Show -Transcript:$Transcript
     } Else {        # Remote Computer
