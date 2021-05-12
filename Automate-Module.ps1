@@ -128,7 +128,7 @@ Function Confirm-Automate {
         [switch]$Silent = $False
     )
     $ErrorActionPreference = 'SilentlyContinue'
-	if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus) {
+    if ((Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus) {
         $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds) -lt 600)} Else {Write $False}
     } else {$Online = $False}
 
@@ -462,37 +462,54 @@ Function Install-Automate {
     $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
     $Error.Clear()
     If ($Transcript) {Start-Transcript -Path "$($env:windir)\Temp\Automate_Deploy.txt" -Force}
-    Write-Verbose "Checking Operating System (WinXP and Older) for HTTP vs HTTPS"
-    If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://$($Server)"} Else {$AutomateURL = "http://$($Server)"}
+    $SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol
     $SoftwarePath = "C:\Support\Automate"
     $Filename = "Automate_Agent.msi"
     $SoftwareFullPath = "$SoftwarePath\$Filename"
+    $AutomateURL = "https://$($Server)"
+    
+    Write-Verbose "Checking Operating System (WinXP and Older)"
+    If ([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -lt 6000) {
+        $OS = ((Get-WmiObject Win32_OperatingSystem).Caption)
+        Write-Host "This computer is running $($OS), and is no longer officially supported by ConnectWise Automate" -ForegroundColor Red
+        Write-Host "https://docs.connectwise.com/ConnectWise_Automate/ConnectWise_Automate_Supportability_Statements/Supportability_Statement:_Windows_XP_and_Server_2003_End_of_Life" -ForegroundColor Red
+        Write-Host ""
+        $AutomateURL = "https://$($Server)"
+    }
+    
+    Try {
+        Write-Verbose "Enabling downloads to use SSL/TLS v1.2"
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
+    }
+    Catch {
+        Write-Verbose "Failed to enable SSL/TLS v1.2"
+        Write-Host "This computer is not configured for SSL/TLS v1.2" -ForegroundColor Red
+        Write-Host "https://docs.connectwise.com/ConnectWise_Automate/ConnectWise_Automate_Supportability_Statements/Supportability_Statement:_TLS_1.0_and_1.1_Protocols_Unsupported" -ForegroundColor Red
+        Write-Host ""
+        $AutomateURL = "https://$($Server)"
+    }
+    
+    Try {
+        $AutomateURLTest = "$($AutomateURL)/LabTech/"
+        $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
+        Write-Verbose "$AutomateURL is Active"
+    }
+    Catch {
+        Write-Verbose "Could not download from $($AutomateURL). Switching to http://$($Server)"
+        $AutomateURL = "http://$($Server)"
+    }
+    
     $DownloadPath = $null
     If ($Token -ne $null) {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
-        Write-Verbose "DownloadPathToken: $($DownloadPath)"
+        Write-Verbose "Downloading from: $($DownloadPath)"
     }
-    If ($DownloadPath -eq $null) {
+    else {
+        Write-Verbose "A -Token <String[]> was not entered"
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
-        Write-Host "The -Token Parameters Was Not Entered" -ForegroundColor Red
-        Write-Verbose "DownloadPathOld: $($DownloadPath)"
-    }
-    Write-Verbose "Downloading from $($DownloadPath)"
-    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"
-    Try {
-        If ((get-host).Version.ToString() -ge 3 -and (!$Installer)) {
-            $TestURL = (New-Object Net.WebClient).DownloadString($DownloadPath)
-            Write-Verbose "$AutomateURL is Active"
-        }
-    }
-    Catch {
-        Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible. Failed to Download:" -ForegroundColor Red
-        Write-Host "$($DownloadPath)" -ForegroundColor Red
-        Write-Host "Help: Get-Help Install-Automate -Full"
-        Write-Host " "
-        Confirm-Automate -Show
-         Break
-        }
+        Write-Verbose "Downloading from (Old): $($DownloadPath)"
+    }   
+        
     Confirm-Automate -Silent -Verbose:$Verbose
     Write-Verbose "If ServerAddress matches, the Automate Agent is currently Online, and Not forced to Rip & Replace then Automate is already installed."
     Write-Verbose (($Global:Automate.ServerAddress -like "*$($Server)*") -and ($Global:Automate.Online) -and !($Force))
@@ -522,10 +539,13 @@ Function Install-Automate {
                 Write-Verbose "Download Complete"
             }
             Catch {
-                Write-Host "The Automate Server or Token Parameters Was Not Entered or Inaccessible" -ForegroundColor Red
+                Write-Host "The Automate Server was inaccessible or the Token Parameters were not entered or valid. Failed to Download:" -ForegroundColor Red
+                Write-Host $DownloadPath -ForegroundColor Red
+                Write-Host "Help: Get-Help Install-Automate -Full"
                 Write-Host "Exiting Installation..."    
                 Break                
             }
+            
             Write-Verbose "Removing Existing Automate Agent"
             Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
             If (!$Silent) {Write-Host "Installing Automate Agent to $AutomateURL"}
@@ -768,19 +788,51 @@ BEGIN
 {
     $ErrorActionPreference = "SilentlyContinue"
     $Verbose = If ($PSBoundParameters.Verbose -eq $True) { $True } Else { $False }
-    If ((([Int][System.Environment]::OSVersion.Version.Build) -gt 6000) -and ((get-host).Version.ToString() -ge 3)) {$AutomateURL = "https://" + $Server} Else {$AutomateURL = "http://" + $Server}
-    $AutomateURLTest = $AutomateURL +"/LabTech/"
-    Write-Verbose "Checking if Automate Server URL is active. Server entered: $($Server)"	
-    Write-Verbose "$AutomateURLTest"
+
+    $AutomateURL = "https://$($Server)"
+   
+    Write-Verbose "Checking Operating System"
+    If ([int]((Get-WmiObject Win32_OperatingSystem).BuildNumber) -lt 6000) {
+        $OS = ((Get-WmiObject Win32_OperatingSystem).Caption)
+        Write-Host "This computer is running $($OS), and is no longer officially supported by ConnectWise Automate" -ForegroundColor Red
+        Write-Host "https://docs.connectwise.com/ConnectWise_Automate/ConnectWise_Automate_Supportability_Statements/Supportability_Statement:_Windows_XP_and_Server_2003_End_of_Life" -ForegroundColor Red
+        Write-Host ""
+        $AutomateURL = "https://$($Server)"
+    }
+    
     Try {
-        $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
-        Write-Verbose "$($AutomateURL) is Active"
+        Write-Verbose "Enabling downloads to use SSL/TLS v1.2"
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
     }
     Catch {
-        Write-Host "The Automate Server Parameter Was Not Entered or Inaccessible" -ForegroundColor Red
-        Write-Host "Help: Get-Help Push-Automate -Full"
-        Break
-        }
+        Write-Verbose "Failed to enable SSL/TLS v1.2"
+        Write-Host "This computer is not configured for SSL/TLS v1.2" -ForegroundColor Red
+        Write-Host "https://docs.connectwise.com/ConnectWise_Automate/ConnectWise_Automate_Supportability_Statements/Supportability_Statement:_TLS_1.0_and_1.1_Protocols_Unsupported" -ForegroundColor Red
+        Write-Host ""
+        $AutomateURL = "https://$($Server)"
+    }
+    
+    Try {
+        $AutomateURLTest = "$($AutomateURL)/LabTech/"
+        $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
+        Write-Verbose "$AutomateURL is Active"
+    }
+    Catch {
+        Write-Verbose "Could not download from $($AutomateURL). Switching to http://$($Server)"
+        $AutomateURL = "http://$($Server)"
+    }
+    
+    $DownloadPath = $null
+    If ($Token -ne $null) {
+        $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
+        Write-Verbose "Downloading from: $($DownloadPath)"
+    }
+    else {
+        Write-Verbose "A -Token <String[]> was not entered"
+        $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
+        Write-Verbose "Downloading from (Old): $($DownloadPath)"
+    }
+
     $Whoami = whoami
     Write-Verbose "Running Script as: $whoami"
     If (($Username -eq $Null) -and ($Password -eq $Null) -and ($Credential -eq $Null) -and !((whoami) -eq 'nt authority\system'))
@@ -804,6 +856,7 @@ PROCESS
     $Time = Date
     $CheckAutomateWinRM = {
         Write-Verbose "Invoke Confirm-Automate -Silent"
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
         Confirm-Automate -Silent
         Write $Global:Automate
@@ -815,10 +868,11 @@ PROCESS
         $Force = $Args[3]
         $Silent = $Args[4]
         $Transcript = $Args[5]
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
         Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript
     }
-    $WMICMD = 'powershell.exe -Command "Invoke-Expression(New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1''); '
+    $WMICMD = 'powershell.exe -Command "[Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072); Invoke-Expression(New-Object Net.WebClient).DownloadString(''https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1''); '
     $WMIPOSH = "Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Transcript"
     $WMIArg = Write-Output "$WMICMD$WMIPOSH"""
     $WinRMConectivity = "N/A"
@@ -830,6 +884,7 @@ PROCESS
     # Now Trying WinRM 
     If ($Computer -eq $env:COMPUTERNAME) {
         Write-Verbose "Installing Automate on Local Computer - $Computer"
+        [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
         Invoke-Expression(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/Braingears/PowerShell/master/Automate-Module.psm1')
         Install-Automate -Server $Server -LocationID $LocationID -Token $Token -Show:$Show -Transcript:$Transcript
     } Else {        # Remote Computer
@@ -2400,9 +2455,9 @@ IF ($Subnet) {
 }
 ########################
 Function Install-Manage {
-# PowerShell Download & Install - ConnectWise Manage v2019.5
+# PowerShell Download & Install - ConnectWise Manage
 $SoftwarePath = "C:\Support\ConnectWise"
-$DownloadPath = "https://university.connectwise.com/install/2019.5/ConnectWise-Manage-Internet-Client.msi"
+$DownloadPath = "https://university.connectwise.com/install/ConnectWise-Internet-Client-x64.msi"
     $Filename = [System.IO.Path]::GetFileName($DownloadPath)
     $SoftwareFullPath = "$($SoftwarePath)\$Filename"
     If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
@@ -2430,6 +2485,8 @@ Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /qn" -NoNewWi
 $LastExitCode
 If ($LastExitCode -eq 0) {Write "Install Executed Without Errors"} Else {Write-Verbose "Error Exit Code: $($LastExitCode)"}
 }#Function Install-Chrome
+########################
+Function Show-LTErrors {Get-Content -Path 'C:\Windows\LTSVC\LTErrors.txt' -Tail 25 -Wait}
 ########################
 Function New-IPRange {
 <#
