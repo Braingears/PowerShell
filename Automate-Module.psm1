@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     These PowerShell Functions will Install, Push, Uninstall, and Confirm ConnectWise Automate installations. 
-    
+        
 .DESCRIPTION
     Functions Included:
         Confirm-Automate
@@ -48,20 +48,20 @@
     Uninstall-Automate [-Silent]
     
 .EXAMPLE
-    Install-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 [-Show]
+    Install-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' [-Show]
     
 .Example
     To push a single Automate Agent:
-    Push-Automate -Computer 'ComputerName' -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Push-Automate -Computer 'ComputerName' -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     
     For multiple computers, use a | "pipe" into Push-Automate function:
-    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    $Computers | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     - or - 
-     Scan-Network | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'   
+     Scan-Network | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'   
     - or -
-    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    Get-ADComputerNames | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     - or - 
-    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
+    "Computer1", "Computer2" | Push-Automate -Server 'YOURSERVER.DOMAIN.COM' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Username 'DOMAIN\USERNAME' -Password 'Ch@ng3P@ssw0rd'
     
 #>
 Function Confirm-Automate {
@@ -358,7 +358,7 @@ Function Install-Automate {
     The output will be saved to $Automate as an object to be used in other functions.
     
     Example:
-    Install-Automate -Server YOURSERVER.DOMAIN.COM -LocationID 2 -Transcript
+    Install-Automate -Server YOURSERVER.DOMAIN.COM -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Transcript
     
     
     Tested OS:      Windows XP (with .Net 3.5.1 and PowerShell installed)
@@ -375,7 +375,7 @@ Function Install-Automate {
 .PARAMETER Server
     This is the URL to your Automate server.
     
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token 'adb68881994ed93960346478303476f4'
 
 .PARAMETER LocationID
     Use LocationID to install the Automate Agent directly to the appropieate client's location / site.
@@ -390,19 +390,19 @@ Function Install-Automate {
     This will force the Automate Uninstaller prior to installation.
     Essentually, this will be a fresh install and a fresh check-in to the Automate server.
     
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Force
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Force
 
 .PARAMETER Silent
     This will hide all output (except a failed installation when Exit Code -ne 0)
     The function will exit once the installer has completed.
         
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Silent
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Silent
     
 .PARAMETER Transcript
     This parameter will save the entire transcript and responsed to:
     $($env:windir)\Temp\AutomateLogon.txt
         
-        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Transcript -Verbose
+        Install-Automate -Server 'server.hostedrmm.com' -LocationID 2 -Token 'adb68881994ed93960346478303476f4' -Transcript -Verbose
 
 .LINK
     https://github.com/Braingears/PowerShell
@@ -430,10 +430,16 @@ Function Install-Automate {
     Version        : 1.4
     Date           : 06/29/2020
     Changes        : Added Token Parameter for Deployment 
-    
+
+    Version        : 1.5
+    Date           : 06/09/2021
+    Changes        : Attempt to Restart the LTService prior to R&R
+                     It was found that the Rip & Replace was being too aggressive without at least trying to restart the LTService 
+                     and waiting for it to check-in.
+                     
 .EXAMPLE
-    Install-Automate -Server 'automate.domain.com' -LocationID 42 -Token adb68881994ed93960346478303476f4
-    This will install the LabTech agent using the provided Server URL, and LocationID.
+    Install-Automate -Server 'automate.domain.com' -LocationID 42 -Token 'adb68881994ed93960346478303476f4'
+    This will install the LabTech agent using the provided Server URL, LocationID, and required Token. 
 
 
 #>
@@ -488,7 +494,7 @@ Function Install-Automate {
         Write-Host ""
         $AutomateURL = "https://$($Server)"
     }
-    
+
     Try {
         $AutomateURLTest = "$($AutomateURL)/LabTech/"
         $TestURL = (New-Object Net.WebClient).DownloadString($AutomateURLTest)
@@ -509,9 +515,35 @@ Function Install-Automate {
         $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
         Write-Verbose "Downloading from (Old): $($DownloadPath)"
     }   
-        
     Confirm-Automate -Silent -Verbose:$Verbose
-    Write-Verbose "If ServerAddress matches, the Automate Agent is currently Online, and Not forced to Rip & Replace then Automate is already installed."
+    If (($Global:Automate.Service -eq 'Stopped') -and ($Global:Automate.ServerAddress -like "*$($Server)*") -and !($Force)) {
+        Try {
+            Write-Verbose "LTService service is Stopped"
+            Write-Verbose "LTService service is Restarting"
+            Start-Service LTService -ErrorAction Stop
+        }
+        Catch {
+            Write-Verbose "LTService service Restart Failed"
+        }            
+        If (((Get-Service LTService).Status) -eq "Running") {
+            Write-Verbose "LTService was successfully Restarted"
+            Write-Verbose "Now waiting for the Automate Agent to attempt to check-in - Loop 10X"
+            $Count = 0
+            While ($Count -ne 10) {
+                $Count++
+                Start-Sleep 6
+                Confirm-Automate -Silent -Verbose:$Verbose
+                If ($Global:Automate.Online) {
+                    If (!$Silent) {Write-Host "LTService service was successfully Restarted"}                    
+                    Break
+                }
+            }# End While
+        } Else {
+            Write-Verbose "LTService service did not return to a running status"
+        }
+    } # If LTService is Stopped     
+    
+    Write-Verbose "Checking if server address matches and if Automate Agent is Online"
     Write-Verbose (($Global:Automate.ServerAddress -like "*$($Server)*") -and ($Global:Automate.Online) -and !($Force))
     If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
         If (!$Silent) {
