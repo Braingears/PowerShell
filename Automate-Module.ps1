@@ -1137,7 +1137,13 @@ Param(
     [Parameter()]
     [AllowNull()]
     [Alias('Time')]
-    [int]$Months = '1'
+    [int]$Months = '1',
+    [Parameter()]
+    [AllowNull()]
+    [switch]$Servers = $False,
+    [Parameter()]
+    [AllowNull()]
+    [switch]$Workstations = $False
     )
 $Computer =  $env:COMPUTERNAME
 $FilterLastLogonDate = (Get-Date).AddMonths(-$Months)
@@ -1166,7 +1172,10 @@ If ($ImportError -like "*not loaded*") {
         {Write-Host "Access is Denied. Your credentials will not execute on $LogonSrv" -ForegroundColor Red}
     } Else {
         $FilterLastLogonDate = (Get-Date).AddMonths(-$Months)
-        $Computers = Get-ADComputer -Filter 'OperatingSystem -like "Windows*" -and LastLogonDate -ge $FilterLastLogonDate' | Select -ExpandProperty Name | Sort-Object -Unique
+        If ($Servers) {$Computers = Get-ADComputer -Filter 'OperatingSystem -like "*Server*" -and Enabled -eq $True -and LastLogonDate -ge $FilterLastLogonDate'    | Select -ExpandProperty Name | Sort-Object -Unique}
+        If ($Workstations) {$Computers = Get-ADComputer -Filter 'OperatingSystem -notlike "*Server*" -and Enabled -eq $True -and LastLogonDate -ge $FilterLastLogonDate' | Select -ExpandProperty Name | Sort-Object -Unique}
+        If (!$Servers -and !$Workstations) {$Computers = Get-ADComputer -Filter 'Enabled -eq $True -and LastLogonDate -ge $FilterLastLogonDate' | Select -ExpandProperty Name | Sort-Object -Unique}
+        If ($Servers -and $Workstations) {$Computers = Get-ADComputer -Filter 'Enabled -eq $True -and LastLogonDate -ge $FilterLastLogonDate' | Select -ExpandProperty Name | Sort-Object -Unique}
 #        Write-Verbose $Computers
     }
     
