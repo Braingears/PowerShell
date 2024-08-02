@@ -8,9 +8,8 @@
         Uninstall-Automate
         Install-Automate
         Push-Automate
+        Show-LTErrors
         Get-ADComputerNames
-        Install-Chrome
-        Install-Manage
         Scan-Network
         
         New-IPRange
@@ -239,7 +238,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
     If (($Global:Automate.InstFolder) -or ($Global:Automate.InstRegistry) -or (!($Global:Automate.Service -eq $Null)) -or ($Force)) {
     $Filename = [System.IO.Path]::GetFileName($DownloadPath)
     $SoftwareFullPath = "$($SoftwarePath)\$Filename"
-    If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
+    If (!(Test-Path $SoftwarePath)) {New-Item -Path $SoftwarePath -ItemType Directory | Out-Null}
     Set-Location $SoftwarePath
     If ((Test-Path $SoftwareFullPath)) {Remove-Item $SoftwareFullPath | Out-Null}
     $WebClient = New-Object System.Net.WebClient
@@ -259,6 +258,7 @@ Confirm-Automate -Silent -Verbose:$Verbose
         }
     }
     Write-Verbose "Checking For Removal - Loop 5X"
+    $Counter = 0
     While ($Counter -ne 6) {
         $Counter++
         Start-Sleep 10
@@ -442,6 +442,12 @@ Function Install-Automate {
                      When you use the -SystemPassword Parameter, a different MSI URL is used (prior to the metadata being embeded into the MSI), and the 
                      Server Address, LocationID, and System Password is assigned as paramters in the MSIExec installation string. 
 
+    Version        : 1.7
+    Date           : 08/02/2024
+    Changes        : Change -Token download from MSI to Zip due to changes in Automate Patch v24.7
+                     The agent download no longer embeds the Server, Location, and Password in the MSI due to breaking the MSI's Digital Certificate. The default
+                     download is now ZIP which has to be extracted to MSI and MST. 
+
 .EXAMPLE
     Install-Automate -Server 'automate.domain.com' -LocationID 42 -Token 'adb68881994ed93960346478303476f4'
     This will install the LabTech agent using the provided Server URL, LocationID, and required Token. 
@@ -485,6 +491,7 @@ Function Install-Automate {
     $Filename = "Automate_Agent.msi"
     $SoftwareFullPath = "$SoftwarePath\$Filename"
     $AutomateURL = "https://$($Server)"
+
 
     #Check for Cisco AnyConnect VPN / Known Conflict
     Write-Verbose "Checking for known conflicts"
@@ -534,21 +541,9 @@ Function Install-Automate {
         $AutomateURL = "http://$($Server)"
     }
     
-    $DownloadPath = $null
-    If ($SystemPass -ne $Null) {
-        $DownloadPath = "$($AutomateURL)/Labtech/Service/LabTechRemoteAgent.msi"
-        Write-Verbose "Downloading from: $($DownloadPath)"
-    } ElseIf ($Token -ne $Null) {
-        $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
-        Write-Verbose "Downloading from: $($DownloadPath)"
-    } Else {
-        Write-Verbose "A -Token <String[]> was not entered"
-        $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
-        Write-Verbose "Downloading from (Old): $($DownloadPath)"
-    }
-
     Confirm-Automate -Silent -Verbose:$Verbose
-    If (($Global:Automate.Service -eq 'Stopped') -and ($Global:Automate.ServerAddress -like "*$($Server)*") -and !($Force)) {
+    If (($Global:Automate.Service -eq 'Stopped') -and ($Global:Automate.ServerAddress -like "*$Server*") -and !($Force)) {
+
         Try {
             Write-Verbose "LTService service is Stopped"
             Write-Verbose "LTService service is Restarting"
@@ -557,7 +552,8 @@ Function Install-Automate {
         Catch {
             Write-Verbose "LTService service Restart Failed"
         }            
-        If (((Get-Service LTService).Status) -eq "Running") {
+        If ((Get-Service LTService).Status -eq "Running") {
+
             Write-Verbose "LTService was successfully Restarted"
             Write-Verbose "Now waiting for the Automate Agent to attempt to check-in - Loop 10X"
             $Count = 0
@@ -577,7 +573,8 @@ Function Install-Automate {
     } # If LTService is Stopped     
     
     Write-Verbose "Checking if server address matches and if Automate Agent is Online"
-    Write-Verbose (($Global:Automate.ServerAddress -like "*$($Server)*") -and ($Global:Automate.Online) -and !($Force))
+    Write-Verbose (($Global:Automate.ServerAddress -like "*$Server*") -and $Global:Automate.Online -and !$Force)
+
     If (($Global:Automate.ServerAddress -like "*$($Server)*") -and $Global:Automate.Online -and !$Force) {
         If (!$Silent) {
             If ($Show) {
@@ -592,56 +589,119 @@ Function Install-Automate {
             Write-Host "Current Automate Server: $($Global:Automate.ServerAddress)" -ForegroundColor Red
             Write-Host "New Automate Server:     $($AutomateURL)" -ForegroundColor Green
         } # If Different Server 
+        
         Write-Verbose "Downloading Automate Agent from $($AutomateURL)"
-            If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
+            If (!(Test-Path $SoftwarePath)) {New-Item -Path $SoftwarePath -ItemType Directory | Out-Null}
             Set-Location $SoftwarePath
-            If ((test-path $SoftwareFullPath)) {Remove-Item $SoftwareFullPath | Out-Null}
-            Try {
-                Write-Verbose "Downloading from: $($DownloadPath)"
-                Write-Verbose "Downloading to:   $($SoftwareFullPath)"
-                $WebClient = New-Object System.Net.WebClient
-                $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
-                Write-Verbose "Download Complete"
-            }
-            Catch {
-                Write-Host "The Automate Server was inaccessible or the Token Parameters were not entered or valid. Failed to Download:" -ForegroundColor Red
-                Write-Host $DownloadPath -ForegroundColor Red
-                Write-Host "Help: Get-Help Install-Automate -Full"
-                Write-Host "Exiting Installation..."    
-                Break                
-            }
-            Write-Verbose "Removing Existing Automate Agent"
-            Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
-            If (!$Silent) {Write-Host "Installing Automate Agent to $AutomateURL"}
-            Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force -PassThru
-            $Date = (get-date -UFormat %Y-%m-%d_%H-%M-%S)
+
+    # If SystemPass, download MSI. If -Token, download ZIP and extract.
+    If ($SystemPass -ne $Null) {
+        $DownloadPath = "$($AutomateURL)/Labtech/Service/LabTechRemoteAgent.msi"
+        $Filename = "Automate_Agent.msi"
+        $SoftwareFullPath = "$SoftwarePath\$Filename"
+        If ((Test-Path $SoftwareFullPath)) {Remove-Item $SoftwareFullPath | Out-Null}
+        Try {
+            Write-Verbose "Downloading from: $($DownloadPath)"
+            Write-Verbose "Downloading to:   $($SoftwareFullPath)"
+            $WebClient = New-Object System.Net.WebClient
+            $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
+            Write-Verbose "Download Complete"
+        }
+        Catch {
+            Write-Host "The Automate Server was inaccessible. Failed to Download:" -ForegroundColor Red
+            Write-Host $DownloadPath -ForegroundColor Red
+            Write-Host "Help: Get-Help Install-Automate -Full"
+            Write-Host "Exiting Installation..."    
+            Break
+        }
+    } ElseIf ($Token -ne $Null) {
+        $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?InstallerToken=$Token"
+        $DownloadFilename = "Agent_Install.zip"
+        $DownloadFullPath = "$SoftwarePath\$DownloadFilename"
+        $Filename = "Agent_Install.msi"
+        $SoftwareFullPath = "$SoftwarePath\$Filename"
+        If ((Test-Path $DownloadFullPath)) {Remove-Item $DownloadFullPath | Out-Null}
+        Try {
+            Write-Verbose "Downloading from: $($DownloadPath)"
+            Write-Verbose "Downloading to:   $($DownloadFullPath)"
+            $WebClient = New-Object System.Net.WebClient
+            $WebClient.DownloadFile($DownloadPath, $DownloadFullPath)
+            Write-Verbose "Download Complete"
+        }
+        Catch {
+            Write-Host "The Automate Server was inaccessible or the Token Parameters were not entered or valid. Failed to Download:" -ForegroundColor Red
+            Write-Host $DownloadPath -ForegroundColor Red
+            Write-Host "Help: Get-Help Install-Automate -Full"
+            Write-Host "Exiting Installation..."    
+            Break
+        }
+        
+        Try {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [System.IO.Compression.ZipFile]::OpenRead($DownloadFullPath).Entries.FullName | Remove-Item -Force -ErrorAction SilentlyContinue | Out-Null
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($DownloadFullPath, $SoftwarePath)
+            Write-Verbose "Extracting $($DownloadFilename) to $($SoftwarePath)"
+        }
+        Catch {
+            Write-Host "The files could not be extracted from ZIP"
+            Write-Host "Confirm that you've upgraded to Automate Patch 24.7"
+            Break
+        }
+    } Else {
+        Write-Verbose "A -Token <String[]> was not entered"
+        $DownloadPath = "$($AutomateURL)/Labtech/Deployment.aspx?Probe=1&installType=msi&MSILocations=$($LocationID)"
+        $Filename = "Automate_Agent.msi"
+        $SoftwareFullPath = "$SoftwarePath\$Filename"
+        Try {
+            Write-Verbose "Downloading from (Old): $($DownloadPath)"
+            Write-Verbose "Downloading to:   $($SoftwareFullPath)"
+            $WebClient = New-Object System.Net.WebClient
+            $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
+            Write-Verbose "Download Complete"
+        }
+        Catch {
+            Write-Host "The Automate Server was inaccessible. Failed to Download:" -ForegroundColor Red
+            Write-Host $DownloadPath -ForegroundColor Red
+            Write-Host "Help: Get-Help Install-Automate -Full"
+            Write-Host "Exiting Installation..."    
+            Break
+        }
+    }
+            
+        Write-Verbose "Removing Existing Automate Agent"
+        Uninstall-Automate -Force:$Force -Silent:$Silent -Verbose:$Verbose
+        If (!$Silent) {Write-Host "Installing Automate Agent to $AutomateURL"}
+        Stop-Process -Name "ltsvcmon","lttray","ltsvc","ltclient" -Force -PassThru
+        $Date = (Get-Date -UFormat %Y-%m-%d_%H-%M-%S)
+        $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
+        If ($SystemPass -ne $Null) {
+            $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) SERVERPASS=$($SystemPass) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
+        } Else {
+            $InstallExitCode = (Start-Process 'msiexec.exe' -ArgumentList "/i $($SoftwareFullPath) TRANSFORMS=$($SoftwarePath)\Agent_Install.mst /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
+            [System.IO.Compression.ZipFile]::OpenRead($DownloadFullPath).Entries.FullName | Remove-Item -Force -ErrorAction SilentlyContinue | Out-Null
+        }
+        Write-Verbose "MSIEXEC Log Files: $LogFullPath"
+        If ($InstallExitCode -eq 0) {
+            If (!$Silent) {Write-Verbose "The Automate Agent Installer Executed Without Errors"}
+        } Else {
+            Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Red
+            Write-Host "Automate Installer Logs: $LogFullPath" -ForegroundColor Red
+            Write-Host "The Automate MSI failed. Waiting 15 Seconds..." -ForegroundColor Red
+            Start-Sleep -s 15
+            Write-Host "Installer will execute twice (KI 12002617)" -ForegroundColor Yellow
+            $Date = (Get-Date -UFormat %Y-%m-%d_%H-%M-%S)
             $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
             If ($SystemPass -ne $Null) {
                 $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) SERVERPASS=$($SystemPass) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
             } Else {
-                $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
+                $InstallExitCode = (Start-Process 'msiexec.exe' -ArgumentList "/i $($SoftwareFullPath) TRANSFORMS=$($SoftwarePath)\Agent_Install.mst /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
             }
-            Write-Verbose "MSIEXEC Log Files: $LogFullPath"
-            If ($InstallExitCode -eq 0) {
-                If (!$Silent) {Write-Verbose "The Automate Agent Installer Executed Without Errors"}
-            } Else {
-                Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Red
-                Write-Host "Automate Installer Logs: $LogFullPath" -ForegroundColor Red
-                Write-Host "The Automate MSI failed. Waiting 15 Seconds..." -ForegroundColor Red
-                Start-Sleep -s 15
-                Write-Host "Installer will execute twice (KI 12002617)" -ForegroundColor Yellow
-                $Date = (get-date -UFormat %Y-%m-%d_%H-%M-%S)
-                $LogFullPath = "$env:windir\Temp\Automate_Agent_$Date.log"
-                If ($SystemPass -ne $Null) {
-                    $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) SERVERPASS=$($SystemPass) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
-                } Else {
-                    $InstallExitCode = (Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /quiet /norestart LOCATION=$($LocationID) SERVERADDRESS=$($AutomateURL) /L*V $($LogFullPath)" -NoNewWindow -Wait -PassThru).ExitCode
-                }
-                Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Yellow
-                Write-Host "Automate Installer Logs: $LogFullPath" -ForegroundColor Yellow
-            }# End Else
+            Write-Host "Automate Installer Exit Code: $InstallExitCode" -ForegroundColor Yellow
+            Write-Host "Automate Installer Logs: $LogFullPath" -ForegroundColor Yellow
+        }# End Else
 
         If ($InstallExitCode -eq 0) {
+            $Counter = 0
             While ($Counter -ne 30) {
                 $Counter++
                 Start-Sleep 10
@@ -649,7 +709,7 @@ Function Install-Automate {
                 If ($Global:Automate.Server -like "Enter the server address here*") {
                     Write-Verbose "The Automate Server Address was not written properly"
                     Write-Verbose "Manually overwriting the Server Address to: $($AutomateURL)"
-                    Set-ItemProperty -Path HKLM:\SOFTWARE\LabTech\Service 'Server Address' -Value $AutomateURL –Force
+                    Set-ItemProperty -Path "HKLM:\SOFTWARE\LabTech\Service" -Name 'Server Address' -Value $AutomateURL -Force
                     Write-Verbose "Restarting LTService after correcting the Server Address"
                     Get-Service LTService | Where {$_.Status -eq "Running"} | Restart-Service -Force
                     Confirm-Automate -Silent -Verbose:$Verbose
@@ -674,6 +734,7 @@ Function Install-Automate {
                 } # End If
             } # End While
         } Else {
+            $Counter = 0
             While ($Counter -ne 3) {
                 $Counter++
                 Start-Sleep 10
@@ -681,7 +742,7 @@ Function Install-Automate {
                 If ($Global:Automate.Server -like "Enter the server address here*") {
                     Write-Verbose "The Automate Server Address was not written properly"
                     Write-Verbose "Manually overwriting the Server Address to: $($AutomateURL)"
-                    Set-ItemProperty -Path HKLM:\SOFTWARE\LabTech\Service 'Server Address' -Value $AutomateURL –Force
+                    Set-ItemProperty -Path "HKLM:\SOFTWARE\LabTech\Service" -Name 'Server Address' -Value $AutomateURL -Force
                     Write-Verbose "Restarting LTService after correcting the Server Address"
                     Get-Service LTService | Where {$_.Status -eq "Running"} | Restart-Service -Force
                     Confirm-Automate -Silent -Verbose:$Verbose
@@ -1414,7 +1475,7 @@ Function Scan-Network
                             [System.Management.Automation.ScriptBlock]$ScriptBlock,
         
                         [Parameter(Mandatory=$false,ParameterSetName='ScriptFile')]
-                        [ValidateScript({test-path $_ -pathtype leaf})]
+                        [ValidateScript({Test-Path $_ -pathtype leaf})]
                             $ScriptFile,
         
                         [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
@@ -2017,7 +2078,7 @@ Function Scan-Network
                                                 $results += $rst
                                                 $failed = 1
                                             }
-                                            Write-verbose "DNS:  $((New-TimeSpan $dt ($dt = get-date)).totalseconds)"
+                                            Write-verbose "DNS:  $((New-TimeSpan $dt ($dt = Get-Date)).totalseconds)"
                                             If($failed -eq 0){
                                                 foreach($ip in $ips)
                                                 {
@@ -2048,11 +2109,11 @@ Function Scan-Network
                                                             Write-Verbose "Error testing RDP: $_"
                                                         }
                                                     }
-                                                Write-verbose "RDP:  $((New-TimeSpan $dt ($dt = get-date)).totalseconds)"
+                                                Write-verbose "RDP:  $((New-TimeSpan $dt ($dt = Get-Date)).totalseconds)"
                                                 #########ping
                                                 If(test-connection $ip -count 2 -Quiet)
                                                 {
-                                                    Write-verbose "PING:  $((New-TimeSpan $dt ($dt = get-date)).totalseconds)"
+                                                    Write-verbose "PING:  $((New-TimeSpan $dt ($dt = Get-Date)).totalseconds)"
                                                     $rst.ping = $true
                         
                                                     If($WSMAN -or $All)
@@ -2066,7 +2127,7 @@ Function Scan-Network
                                                             $rst.WSMAN = $false
                                                             Write-Verbose "Error testing WSMAN: $_"
                                                         }
-                                                        Write-verbose "WSMAN:  $((New-TimeSpan $dt ($dt = get-date)).totalseconds)"
+                                                        Write-verbose "WSMAN:  $((New-TimeSpan $dt ($dt = Get-Date)).totalseconds)"
                                                         If($rst.WSMAN -and $credssp) ########### credssp
                                                         {
                                                             try{
@@ -2078,7 +2139,7 @@ Function Scan-Network
                                                                 $rst.CredSSP = $false
                                                                 Write-Verbose "Error testing CredSSP: $_"
                                                             }
-                                                            Write-verbose "CredSSP:  $((New-TimeSpan $dt ($dt = get-date)).totalseconds)"
+                                                            Write-verbose "CredSSP:  $((New-TimeSpan $dt ($dt = Get-Date)).totalseconds)"
                                                         }
                                                     }
                                                     If($RemoteReg -or $All)
@@ -2093,7 +2154,7 @@ Function Scan-Network
                                                             $rst.remotereg = $false
                                                             Write-Verbose "Error testing RemoteRegistry: $_"
                                                         }
-                                                        Write-verbose "remote reg:  $((New-TimeSpan $dt ($dt = get-date)).totalseconds)"
+                                                        Write-verbose "remote reg:  $((New-TimeSpan $dt ($dt = Get-Date)).totalseconds)"
                                                     }
                                                     If($RPC -or $All)
                                                     {
@@ -2110,7 +2171,7 @@ Function Scan-Network
                                                             $rst.rpc = $false
                                                             Write-Verbose "Error testing WMI/RPC: $_"
                                                         }
-                                                        Write-verbose "WMI/RPC:  $((New-TimeSpan $dt ($dt = get-date)).totalseconds)"
+                                                        Write-verbose "WMI/RPC:  $((New-TimeSpan $dt ($dt = Get-Date)).totalseconds)"
                                                     }
                                                     If($SMB -or $All)
                                                     {
@@ -2128,7 +2189,7 @@ Function Scan-Network
                                                             $rst.SMB = $false
                                                             Write-Verbose "Error testing SMB: $_"
                                                         }
-                                                        Write-verbose "SMB:  $((New-TimeSpan $dt ($dt = get-date)).totalseconds)"
+                                                        Write-verbose "SMB:  $((New-TimeSpan $dt ($dt = Get-Date)).totalseconds)"
         
                                                     }
                                                 }
@@ -2548,38 +2609,6 @@ IF ($Subnet) {
 }
   End{}
 }
-########################
-Function Install-Manage {
-# PowerShell Download & Install - ConnectWise Manage
-$SoftwarePath = "C:\Support\ConnectWise"
-$DownloadPath = "https://university.connectwise.com/install/ConnectWise-Internet-Client-x64.msi"
-    $Filename = [System.IO.Path]::GetFileName($DownloadPath)
-    $SoftwareFullPath = "$($SoftwarePath)\$Filename"
-    If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
-    Set-Location $SoftwarePath
-    If ((Test-Path $SoftwareFullPath)) {Remove-Item $SoftwareFullPath | Out-Null}
-    $WebClient = New-Object System.Net.WebClient
-    $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
-Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /qn" -NoNewWindow -Wait -PassThru
-$LastExitCode
-If ($LastExitCode -eq 0) {Write "Install Executed Without Errors"} Else {Write-Verbose "Error Exit Code: $($LastExitCode)"}
-}# Function Install-Manage 
-########################
-Function Install-Chrome {
-# PowerShell Download & Install Google Chrome x64
-$SoftwarePath = "C:\Support\Google"
-$DownloadPath = "https://dl.google.com/chrome/install/GoogleChromeStandaloneEnterprise64.msi"
-    $Filename = [System.IO.Path]::GetFileName($DownloadPath)
-    $SoftwareFullPath = "$($SoftwarePath)\$Filename"
-    If (!(Test-Path $SoftwarePath)) {md $SoftwarePath | Out-Null}
-    Set-Location $SoftwarePath
-    If ((Test-Path $SoftwareFullPath)) {Remove-Item $SoftwareFullPath | Out-Null}
-    $WebClient = New-Object System.Net.WebClient
-    $WebClient.DownloadFile($DownloadPath, $SoftwareFullPath)
-Start-Process "msiexec.exe" -ArgumentList "/i $($SoftwareFullPath) /qn" -NoNewWindow -Wait -PassThru
-$LastExitCode
-If ($LastExitCode -eq 0) {Write "Install Executed Without Errors"} Else {Write-Verbose "Error Exit Code: $($LastExitCode)"}
-}#Function Install-Chrome
 ########################
 Function Show-LTErrors {Get-Content -Path 'C:\Windows\LTSVC\LTErrors.txt' -Tail 25 -Wait}
 ########################
