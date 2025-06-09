@@ -11,6 +11,9 @@
         Show-LTErrors
         Get-ADComputerNames
         Scan-Network
+		Invoke-AutomateUpgrade
+		Get-AutomateRestore
+		Set-AutomateRestore
         
         New-IPRange
         http://powershell.com/cs/media/p/9437.aspx
@@ -2679,3 +2682,339 @@ param (
         }
     }
 } # End New-IPRange
+########################
+
+Function Invoke-AutomateUpgrade {
+<#
+.SYNOPSIS
+    This PowerShell Function will create a perform an Automate Update to the latest version. 
+
+.DESCRIPTION
+    This function use the information in the registry to download and update Automate to the latest version installed on the Automate Server.
+
+.PARAMETER Backup
+    Saves a backup of the registry [HKLM:\SOFTWARE\LabTech\Service] to C:\
+    Enabled by Default
+    
+.PARAMETER Silent
+    This will hide all output dialog
+
+.LINK
+    https://github.com/Braingears/PowerShell
+
+.NOTES
+    Version        : 1.0
+    Author         : Chuck Fowler
+    Creation Date  : 6/5/2025
+    Purpose/Change : Initial script development
+
+.EXAMPLE
+    Invoke-AutomateUpgrade 
+    
+.EXAMPLE
+    Invoke-AutomateUpgrade -Backup:$False
+    
+    - Authenticode signature for a LTSvc.exe [LTService]
+
+.EXAMPLE
+    Invoke-AutomateUpgrade -Cert
+    
+    - Performs       
+#>
+[CmdletBinding(SupportsShouldProcess=$True)]
+Param (
+      [switch]$Backup = $True,
+      [Parameter()]
+      [Alias("Auth", "Certificate")]
+      [switch]$Cert,
+      [switch]$Silent = $False
+      )
+    $ErrorActionPreference = 'SilentlyContinue'
+    CLS
+    If (!(Test-Path "HKLM:\SOFTWARE\LabTech\Service")) {
+      Write-Host "Automate is not installed on this computer" -ForegroundColor Red
+      Break
+    }
+    $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds) -lt 600)} Else {$False}
+    If (!$Silent) {Write "Automate Agent Online: $($Online)"}
+    $AutomateAgentSrvRaw = (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service")."Server Address"
+    $AutomateAgentSrv = ($AutomateAgentSrvRaw -split '\|')[0]
+    $AutomateAgentVer = (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").Version
+    $AutomateAgentVerUrl = "$($AutomateAgentSrv)/labtech/agent.aspx"
+    Write-Verbose "Getting up-to-date Automate Version from: $AutomateAgentVerUrl"
+    $Response = Invoke-WebRequest -Uri $AutomateAgentVerUrl -UseBasicParsing -ErrorAction Stop
+    if ($Response.Content -match '(\d+\.\d+)') {$AutomateAgentVer = $matches[1]} else {$AutomateAgentVer = (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").Version}
+    $Filename = "LabTechUpdate_$($AutomateAgentVer).exe"
+    $SoftwarePath = "$env:windir\LTSvc\AgentRestore\LTUpdate"
+    $DownloadPath = "$($AutomateAgentSrv)/LabTech/Updates/$($Filename)"
+    $SoftwareFullPath = "$($SoftwarePath)\$($Filename)"
+    $TimeStamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    If ($Backup) {
+        $AutomateRegFullPath = "C:\CWABackup_$TimeStamp.reg"
+        Write-Verbose "Creating Registry Backup to: $AutomateRegFullPath"
+        If (!$Silent) {Write "Creating Registry Backup to: $AutomateRegFullPath"}
+        reg export "HKLM\Software\LabTech\Service" "$AutomateRegFullPath" /y
+    }
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+    if ((Test-Path $SoftwarePath)) {Remove-Item $SoftwarePath -Recurse -Force -ea 0}
+    if (!(Test-Path $SoftwarePath)) {New-Item -Path $SoftwarePath -ItemType Directory -Force -ea 0 | Out-Null}  
+    Set-Location $SoftwarePath
+    Write-Verbose "Downloading $Filename"
+    (New-Object System.Net.WebClient).DownloadFile($DownloadPath, $SoftwareFullPath)
+    & $SoftwareFullPath
+    & "$($SoftwarePath)\Update.exe"
+    If (!$Silent) {Write "LabTechUpdate has completed | Exit Code: $LastExitCode"}
+    If ($Cert) {
+        $AuthSig = Get-AuthenticodeSignature -FilePath 'C:\Windows\LTSvc\LTSvc.exe'
+        Write-Verbose "Authenticode Signature for: C:\Windows\LTSvc\LTSvc.exe"
+        If ($AuthSig.Status -eq "Valid") {
+            Write-Host ""
+            Write-Host "Authenticode Signature is: $($AuthSig.Status)" -ForegroundColor Green
+            $AuthSig.SignerCertificate | FL Subject, Issuer, ThumbPrint, NotAfter
+            Write-Verbose ($AuthSig | Select -Property *)
+        } Else {
+            Write-Host ""
+            Write-Host "Authenticode Signature is: $($AuthSig.Status)" -ForegroundColor Red
+            $AuthSig | FL
+        }
+    }
+    Set-Location -Path "C:\"
+    While ($Count -ne 10) {
+        $Count++
+        Write-Verbose "Waiting for Automate Agent to check-in [$($Count)/10]"
+        sc.exe control LTService 136 | Out-Null
+        Start-Sleep 6
+        $Online = If ((Test-Path "HKLM:\SOFTWARE\LabTech\Service") -and ((Get-Service ltservice).status) -eq "Running") {((((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds) -lt 600)} Else {Write $False}
+        If ($Online) {
+          $LastStatus = ([int]((Get-Date) - (Get-Date (Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service").LastSuccessStatus)).TotalSeconds)
+          If (!$Silent) {
+              Write-Host "Automate Agent Online: $($Online)"
+              Write-Host "Last Agent Check-in: $($LastStatus) seconds ago"}
+          Break
+        }
+    }
+} # End Invoke-AutomateUpgrade
+########################
+
+Function Get-AutomateRestore {
+    <#
+    .SYNOPSIS
+        This PowerShell Function will read Automate Restore Hive in the Registry.
+    
+    .DESCRIPTION
+        This function will read the Automate ComputerID, LocationID, Server, and Server Password from the Automate Recovery registry keys. 
+    	 The hive is located at:
+    	 HKEY_LOCAL_MACHINE\SOFTWARE\CWAutomate\AgentRestore
+    
+    .PARAMETER Raw
+        This will show the Automate registry entries
+    
+    .PARAMETER Show
+        This will display $Automate object
+    
+    .PARAMETER Silent
+        This will hide all output
+    
+    .LINK
+        https://github.com/Braingears/PowerShell
+        
+    .NOTES
+        Version        : 1.0
+        Author         : Chuck Fowler
+        Creation Date  : 06/05/2025
+        Purpose/Change : Initial script development
+                         
+    .EXAMPLE
+        Get-AutomateRestore 
+		
+		ServerAddress : server.domain.com
+        ComputerID    : 123
+        LocationID    : 2
+        RebuildCount  : 0
+        ServerPass    : =LvBQdL!{STFp}NL!CwallYMdEQIohNwzwcptxSsbm\YV{LsjQr2Hv0dPw$CF76
+        Updated       : 2025-06-06 13:40:33
+    #>
+    [CmdletBinding()]
+    param(
+        [switch]$Raw,
+        [switch]$Silent,
+        [switch]$Show = $True
+    )
+	    
+	If (Test-Path "HKLM:\Software\CWAutomate\AgentRestore") {
+	    Write-Verbose 'Loading values from: "HKLM:\Software\CWAutomate\AgentRestore"'
+	    $CWARestoreReg = Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
+	    $Global:AutomateRestore = [pscustomobject]@{
+        ServerAddress  = $CWARestoreReg.'Server' 
+        ComputerID     = $CWARestoreReg.ID 
+        LocationID     = $CWARestoreReg.LocationID 
+        RebuildCount   = $CWARestoreReg.RebuildCount 
+        ServerPass     = $CWARestoreReg.ServerPassword 
+        Updated        = $CWARestoreReg.Updated 
+        }
+	    if ($Show -and !$Silent) {
+			Write-Verbose 'Displaying $AutomateRestore'
+			Write-Output $AutomateRestore
+		}
+        If ($Raw) {
+			Write-Verbose 'Displaying Registry: "HKLM:\Software\CWAutomate\AgentRestore"'
+			Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
+		}
+	} else {
+    Write-Verbose "The registry keys could not be found"
+	Write-Verbose "Checking if registry values can be obtained from Automate Agent"
+	Set-AutomateRestore -Show:$Show -Silent:$Silent -Verbose:$Verbose
+    }
+} # End Get-AutomateRestore
+########################
+
+Function Set-AutomateRestore {
+    <#
+    .SYNOPSIS
+        This PowerShell Function will create an Automate Restore Hive in the Registry.
+    
+    .DESCRIPTION
+        This function will read the Automate ComputerID, LocationID, Server, and Server Password from the currently installed Automate agent. 
+    	 It then creates new restore registry keys used to re-installing Automate. The hive is located at:
+    	 HKEY_LOCAL_MACHINE\SOFTWARE\CWAutomate\AgentRestore
+    
+    .PARAMETER Raw
+        This will show the Automate registry entries
+    
+    .PARAMETER Show
+        This will display $Automate object
+    
+    .PARAMETER Silent
+        This will hide all output
+    
+    .LINK
+        https://github.com/Braingears/PowerShell
+        
+    .NOTES
+        Version        : 1.0
+        Author         : Chuck Fowler
+        Creation Date  : 06/05/2025
+        Purpose/Change : Initial script development
+                         
+    .EXAMPLE
+        Set-AutomateRestore 
+    #>
+    [CmdletBinding()]
+    param(
+        [switch]$Show
+    )
+
+    if (Test-Path "HKLM:\SOFTWARE\LabTech\Service") {
+        $LTSvcReg = Get-ItemProperty "HKLM:\SOFTWARE\LabTech\Service"
+
+        # Handle LastSuccessStatus for Online status
+        if ($LTSvcReg.LastSuccessStatus) {
+            $lastSuccessDate = [DateTime]::MinValue
+            if ([DateTime]::TryParse($LTSvcReg.LastSuccessStatus, [ref]$lastSuccessDate)) {
+                $Online = if ((Get-Service LTService -ErrorAction SilentlyContinue).Status -eq 'Running') {
+                    ((Get-Date) - $lastSuccessDate).TotalSeconds -lt 600
+                } else {
+                    $False
+                }
+            } else {
+                $Online = $False
+            }
+        } else {
+            $Online = $False
+        }
+Write-Verbose 'Loading values from "HKLM:\SOFTWARE\LabTech\Service"'
+        # Create the Automate object
+        $Global:Automate = [pscustomobject]@{
+            ComputerName   = $env:ComputerName
+            ServerAddress  = $LTSvcReg.'Server Address'
+            ServerFQDN     = ($LTSvcReg.'Server Address' -split '\|')[0] -replace '^https?://',''
+            ComputerID     = $LTSvcReg.ID
+            ClientID       = $LTSvcReg.ClientID
+            LocationID     = $LTSvcReg.LocationID
+            Version        = $LTSvcReg.Version
+            ServerPass     = $LTSvcReg.ServerPassword
+            InstFolder     = Test-Path "$($env:windir)\ltsvc"
+            InstRegistry   = $True
+            Installed      = Test-Path "$($env:windir)\ltsvc"
+            Service        = (Get-Service LTService -ErrorAction SilentlyContinue).Status
+            Online         = $Online
+        }
+
+        # Handle HeartbeatLastSent
+        if ($LTSvcReg.HeartbeatLastSent) {
+            $heartbeatDate = [DateTime]::MinValue
+            if ([DateTime]::TryParse($LTSvcReg.HeartbeatLastSent, [ref]$heartbeatDate)) {
+                if ($heartbeatDate -eq [DateTime]::MinValue) {
+                    $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value "Never"
+                } else {
+                    $seconds = [long]((Get-Date) - $heartbeatDate).TotalSeconds
+                    $Global:Automate | Add-Member -MemberType NoteProperty -Name LastHeartbeat -Value $seconds
+                }
+            }
+        }
+
+        # Handle LastSuccessStatus for LastStatus
+        if ($LTSvcReg.LastSuccessStatus) {
+            $lastSuccessDate = [DateTime]::MinValue
+            if ([DateTime]::TryParse($LTSvcReg.LastSuccessStatus, [ref]$lastSuccessDate)) {
+                if ($lastSuccessDate -eq [DateTime]::MinValue) {
+                    $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value "Never"
+                } else {
+                    $seconds = [long]((Get-Date) - $lastSuccessDate).TotalSeconds
+                    $Global:Automate | Add-Member -MemberType NoteProperty -Name LastStatus -Value $seconds
+                }
+            }
+        }
+        Write-Verbose 'Writing values to: "HKLM:\Software\CWAutomate\AgentRestore"'
+        # Registry operations for restore
+        $CWARestoreReg = "HKLM:\Software\CWAutomate\AgentRestore"
+        if (!(Test-Path $CWARestoreReg)) {
+            New-Item -Path $CWARestoreReg -Force | Out-Null
+        }
+
+        # Set ComputerID
+        Remove-ItemProperty -Path $CWARestoreReg -Name "ID" -ErrorAction SilentlyContinue -Force
+        New-ItemProperty -Path $CWARestoreReg -Name "ID" -Value $Automate.ComputerID -PropertyType "DWord" -Force | Out-Null
+
+        # Set LocationID
+        Remove-ItemProperty -Path $CWARestoreReg -Name "LocationID" -ErrorAction SilentlyContinue -Force
+        New-ItemProperty -Path $CWARestoreReg -Name "LocationID" -Value $Automate.LocationID -PropertyType "DWord" -Force | Out-Null
+
+        # Set Server
+        Remove-ItemProperty -Path $CWARestoreReg -Name "Server" -ErrorAction SilentlyContinue -Force
+        New-ItemProperty -Path $CWARestoreReg -Name "Server" -Value $Automate.ServerFQDN -PropertyType "String" -Force | Out-Null
+
+        # Set ServerPassword
+        Remove-ItemProperty -Path $CWARestoreReg -Name "ServerPassword" -ErrorAction SilentlyContinue -Force
+        New-ItemProperty -Path $CWARestoreReg -Name "ServerPassword" -Value $Automate.ServerPass -PropertyType "String" -Force | Out-Null
+
+        # Set Updated
+        Remove-ItemProperty -Path $CWARestoreReg -Name "Updated" -ErrorAction SilentlyContinue -Force
+        New-ItemProperty -Path $CWARestoreReg -Name "Updated" -Value (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") -PropertyType "String" -Force | Out-Null
+
+        # Output $Automate if -Show is $True
+        if ($Show) {Write-Output $Automate}
+    } else {
+        Write-Host "Automate Not Installed. Restore registry was not created." -ForegroundColor Red
+    }
+	Write-Verbose 'Loading values from "HKLM:\Software\CWAutomate\AgentRestore"'    
+	If (Test-Path "HKLM:\Software\CWAutomate\AgentRestore") {
+	$CWARestoreReg = Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
+	        $Global:AutomateRestore = [pscustomobject]@{
+            ServerAddress  = $CWARestoreReg.Server
+            ComputerID     = $CWARestoreReg.ID 
+            LocationID     = $CWARestoreReg.LocationID 
+            RebuildCount   = $CWARestoreReg.RebuildCount 
+            ServerPass     = $CWARestoreReg.ServerPassword 
+            Updated        = $CWARestoreReg.Updated 
+        }
+	    if ($Show -and !$Silent) {
+			Write-Verbose 'Displaying $AutomateRestore'
+			Write-Output $AutomateRestore
+		}
+	    If ($Raw) {
+			Write-Verbose 'Displaying Registry: "HKLM:\Software\CWAutomate\AgentRestore"'
+			Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
+		}
+	}
+} # End Set-AutomateRestore
