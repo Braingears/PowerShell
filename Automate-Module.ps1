@@ -11,9 +11,9 @@
         Show-LTErrors
         Get-ADComputerNames
         Scan-Network
-		Invoke-AutomateUpgrade
-		Get-AutomateRestore
-		Set-AutomateRestore
+        Invoke-AutomateUpgrade
+        Get-AutomateRestore
+        Set-AutomateRestore
         
         New-IPRange
         http://powershell.com/cs/media/p/9437.aspx
@@ -2803,8 +2803,8 @@ Function Get-AutomateRestore {
     
     .DESCRIPTION
         This function will read the Automate ComputerID, LocationID, Server, and Server Password from the Automate Recovery registry keys. 
-    	 The hive is located at:
-    	 HKEY_LOCAL_MACHINE\SOFTWARE\CWAutomate\AgentRestore
+         The hive is located at:
+         HKEY_LOCAL_MACHINE\SOFTWARE\CWAutomate\AgentRestore
     
     .PARAMETER Raw
         This will show the Automate registry entries
@@ -2826,8 +2826,8 @@ Function Get-AutomateRestore {
                          
     .EXAMPLE
         Get-AutomateRestore 
-		
-		ServerAddress : server.domain.com
+        
+        ServerAddress : server.domain.com
         ComputerID    : 123
         LocationID    : 2
         RebuildCount  : 0
@@ -2840,11 +2840,11 @@ Function Get-AutomateRestore {
         [switch]$Silent,
         [switch]$Show = $True
     )
-	    
-	If (Test-Path "HKLM:\Software\CWAutomate\AgentRestore") {
-	    Write-Verbose 'Loading values from: "HKLM:\Software\CWAutomate\AgentRestore"'
-	    $CWARestoreReg = Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
-	    $Global:AutomateRestore = [pscustomobject]@{
+        
+    If (Test-Path "HKLM:\Software\CWAutomate\AgentRestore") {
+        Write-Verbose 'Loading values from: "HKLM:\Software\CWAutomate\AgentRestore"'
+        $CWARestoreReg = Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
+        $Global:AutomateRestore = [pscustomobject]@{
         ServerAddress  = $CWARestoreReg.'Server' 
         ComputerID     = $CWARestoreReg.ID 
         LocationID     = $CWARestoreReg.LocationID 
@@ -2852,18 +2852,18 @@ Function Get-AutomateRestore {
         ServerPass     = $CWARestoreReg.ServerPassword 
         Updated        = $CWARestoreReg.Updated 
         }
-	    if ($Show -and !$Silent) {
-			Write-Verbose 'Displaying $AutomateRestore'
-			Write-Output $AutomateRestore
-		}
+        if ($Show -and !$Silent) {
+            Write-Verbose 'Displaying $AutomateRestore'
+            Write-Output $AutomateRestore
+        }
         If ($Raw) {
-			Write-Verbose 'Displaying Registry: "HKLM:\Software\CWAutomate\AgentRestore"'
-			Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
-		}
-	} else {
+            Write-Verbose 'Displaying Registry: "HKLM:\Software\CWAutomate\AgentRestore"'
+            Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
+        }
+    } else {
     Write-Verbose "The registry keys could not be found"
-	Write-Verbose "Checking if registry values can be obtained from Automate Agent"
-	Set-AutomateRestore -Show:$Show -Silent:$Silent -Verbose:$Verbose
+    Write-Verbose "Checking if registry values can be obtained from Automate Agent"
+    Set-AutomateRestore -Show:$Show -Silent:$Silent -Verbose:$Verbose
     }
 } # End Get-AutomateRestore
 ########################
@@ -2875,8 +2875,8 @@ Function Set-AutomateRestore {
     
     .DESCRIPTION
         This function will read the Automate ComputerID, LocationID, Server, and Server Password from the currently installed Automate agent. 
-    	 It then creates new restore registry keys used to re-installing Automate. The hive is located at:
-    	 HKEY_LOCAL_MACHINE\SOFTWARE\CWAutomate\AgentRestore
+         It then creates new restore registry keys used to re-installing Automate. The hive is located at:
+         HKEY_LOCAL_MACHINE\SOFTWARE\CWAutomate\AgentRestore
     
     .PARAMETER Raw
         This will show the Automate registry entries
@@ -2997,10 +2997,10 @@ Write-Verbose 'Loading values from "HKLM:\SOFTWARE\LabTech\Service"'
     } else {
         Write-Host "Automate Not Installed. Restore registry was not created." -ForegroundColor Red
     }
-	Write-Verbose 'Loading values from "HKLM:\Software\CWAutomate\AgentRestore"'    
-	If (Test-Path "HKLM:\Software\CWAutomate\AgentRestore") {
-	$CWARestoreReg = Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
-	        $Global:AutomateRestore = [pscustomobject]@{
+    Write-Verbose 'Loading values from "HKLM:\Software\CWAutomate\AgentRestore"'    
+    If (Test-Path "HKLM:\Software\CWAutomate\AgentRestore") {
+    $CWARestoreReg = Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
+            $Global:AutomateRestore = [pscustomobject]@{
             ServerAddress  = $CWARestoreReg.Server
             ComputerID     = $CWARestoreReg.ID 
             LocationID     = $CWARestoreReg.LocationID 
@@ -3008,13 +3008,14 @@ Write-Verbose 'Loading values from "HKLM:\SOFTWARE\LabTech\Service"'
             ServerPass     = $CWARestoreReg.ServerPassword 
             Updated        = $CWARestoreReg.Updated 
         }
-	    if ($Show -and !$Silent) {
-			Write-Verbose 'Displaying $AutomateRestore'
-			Write-Output $AutomateRestore
-		}
-	    If ($Raw) {
-			Write-Verbose 'Displaying Registry: "HKLM:\Software\CWAutomate\AgentRestore"'
-			Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
-		}
-	}
+        if ($Show -and !$Silent) {
+            Write-Verbose 'Displaying $AutomateRestore'
+            Write-Output $AutomateRestore
+        }
+        If ($Raw) {
+            Write-Verbose 'Displaying Registry: "HKLM:\Software\CWAutomate\AgentRestore"'
+            Get-ItemProperty "HKLM:\Software\CWAutomate\AgentRestore"
+        }
+    }
 } # End Set-AutomateRestore
+
